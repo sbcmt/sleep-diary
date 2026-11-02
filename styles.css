@@ -136,3 +136,35 @@
  .sleep-table thead .weight-head{font-size:5.3pt!important}
  .sleep-table tbody tr:nth-child(even) td.weight-cell{background:#f3f7fc!important}
 }
+
+/* v1.0.2: 画面の列幅をcolgroupで確実に固定（PDFとは独立した横スクロール） */
+:root{--datecol:83px;--slot:26px;--sleepcol:132px;--weightcol:85px;--notecol:124px}
+.sleep-table{min-width:calc(var(--datecol) + 48 * var(--slot) + 2 * var(--sleepcol) + var(--weightcol) + var(--notecol));width:calc(var(--datecol) + 48 * var(--slot) + 2 * var(--sleepcol) + var(--weightcol) + var(--notecol))}
+.sleep-table col.col-date{width:var(--datecol)}
+.sleep-table col.col-slot{width:var(--slot)}
+.sleep-table col.col-sleep{width:var(--sleepcol)}
+.sleep-table col.col-weight{width:var(--weightcol)}
+.sleep-table col.col-event{width:var(--notecol)}
+.sleep-table .extra,.sleep-table thead .sleepiness-head{white-space:nowrap!important;overflow:visible;font-size:12px;letter-spacing:0}
+.sleep-table thead .event-head{white-space:nowrap}
+.sleep-table .event-cell{width:var(--notecol);min-width:var(--notecol);max-width:var(--notecol);font-size:11px}
+#entry-date,#first-month{appearance:auto;-webkit-appearance:auto;display:block!important;width:100%!important;min-width:0!important;max-width:none!important;min-height:44px!important;flex:1 1 auto;box-sizing:border-box!important}
+#entry-date::-webkit-datetime-edit,#first-month::-webkit-datetime-edit{min-width:0}
+#entry-date:focus,#first-month:focus{max-width:100%}
+#entry-time-row.single-time{grid-template-columns:1fr}
+#entry-time-row.single-time>.field{max-width:none}
+.theme-choice{display:flex;align-items:center;justify-content:center;min-width:58px;min-height:56px;padding:8px;border-radius:12px}
+.theme-choice .color-dot{margin:0;width:33px;height:33px}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media print{
+ html,body{width:283mm!important;min-width:283mm!important;max-width:283mm!important;overflow:visible!important}
+ .shell{width:283mm!important;max-width:283mm!important;margin:0!important;overflow:visible!important}
+ .sleep-table{min-width:0!important;width:100%!important}
+ .sleep-table col.col-slot{width:auto!important}
+ .sleep-table col.col-sleep{width:17mm!important}
+ .sleep-table col.col-event{width:38mm!important}
+ .sleep-table col.col-weight{width:12mm!important}
+ .sleep-table .event-cell{min-width:0!important;max-width:none!important}
+ .chart-print-heading,.chart-print-footer{break-inside:avoid!important}
+ .sleep-table tbody tr{break-inside:avoid!important}
+}

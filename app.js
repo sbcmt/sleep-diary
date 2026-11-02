@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.1 (2026-11-02) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.2 (2026-11-02) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -90,7 +90,7 @@ function userDoc(){return doc(db,'users',currentUser.uid)}
 function dayRef(key){return doc(db,'users',currentUser.uid,'days',key)}
 function medRef(key){return doc(db,'users',currentUser.uid,'medications',key)}
 function assertSession(){if(!currentUser||!currentUser.emailVerified)throw new Error('not signed in')}
-function normalDay(key){const a=state.days[key];return a?{...freshDay(),...a,weight:validWeight(a.weight),slots:Array.from({length:48},(_,i)=>['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:''),markers:(a.markers||[]).filter(x=>Number.isInteger(x.slot)&&x.slot>=0&&x.slot<48&&['med','bed','wake'].includes(x.type))}:freshDay()}
+function normalDay(key){const a=state.days[key];return a?{...freshDay(),...a,weight:validWeight(a.weight),slots:Array.from({length:48},(_,i)=>['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:''),markers:(a.markers||[]).filter(x=>Number.isInteger(x.slot)&&x.slot>=0&&x.slot<48&&['med','bed','wake','meal'].includes(x.type))}:freshDay()}
 function validWeight(v){return typeof v==='number'&&Number.isFinite(v)&&v>=0.1&&v<=500&&Math.abs(v*10-Math.round(v*10))<0.00001?Math.round(v*10)/10:null}
 function dayData(key){return state.days[key]??(state.days[key]=freshDay())}
 async function loadMonth(month){
@@ -151,7 +151,7 @@ async function reloadEmailStatus(){if(!currentUser)return;await action($('#send-
 
 function applyTheme(){const t=themes[state.settings.theme]||themes.blue;for(const [key,val] of Object.entries({'--accent':t.accent,'--soft':t.soft,'--sleep':t.sleep,'--rest':t.rest}))document.documentElement.style.setProperty(key,val)}
 function isHabit(i){let b=idx(state.settings.habitBed),w=idx(state.settings.habitWake);return b===w?false:b<w?i>=b&&i<w:i>=b||i<w}
-function markerSVG(type){const paths={med:'<circle cx="10" cy="10" r="7.1"/><circle cx="10" cy="10" r="3.3"/>',bed:'<path d="M10 3 L17 16 H3 Z"/>',wake:'<path d="M3 4 H17 L10 17 Z"/>'};const names={med:'服薬',bed:'就寝',wake:'起床'};return paths[type]?`<svg class="marker-icon" viewBox="0 0 20 20" role="img" aria-label="${names[type]}">${paths[type]}</svg>`:''}
+function markerSVG(type){const paths={med:'<circle cx="10" cy="10" r="7.1"/><circle cx="10" cy="10" r="3.3"/>',bed:'<path d="M10 3 L17 16 H3 Z"/>',wake:'<path d="M3 4 H17 L10 17 Z"/>',meal:'<rect x="3" y="3" width="14" height="14"/>'};const names={med:'服薬',bed:'就寝',wake:'起床',meal:'食事'};return paths[type]?`<svg class="marker-icon" viewBox="0 0 20 20" role="img" aria-label="${names[type]}">${paths[type]}</svg>`:''}
 function printPattern(kind){
  if(kind==='sleep')return '<svg class="print-glyph" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="100" height="100" fill="var(--sleep)"/></svg>';
  if(kind==='rest')return '<svg class="print-glyph rest-glyph" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M9 91 L91 9" stroke="#27313d" stroke-width="14" stroke-linecap="butt" fill="none"/></svg>';
@@ -168,7 +168,7 @@ function renderChart(){
  $('#print-medicines').textContent=medicines.length?'服用薬・変更履歴：'+medicines.map(x=>`${x.name}（${x.start||'開始日未設定'}${x.end?'～'+x.end:''}）`).join('　／　'):'服用薬・変更履歴：記録なし';
  const head='<colgroup><col class="col-date">'+Array.from({length:48},()=>'<col class="col-slot">').join('')+'<col class="col-sleep"><col class="col-sleep"><col class="col-weight"><col class="col-event"></colgroup><thead><tr><th class="date-cell">日付・曜日</th>'+Array.from({length:24},(_,h)=>{
  const rects=[isHabit(h*2),isHabit(h*2+1)].map((on,j)=>on?`<rect class="habit-shade" x="${j*50}" y="0" width="50" height="100"/><line class="habit-underbar" x1="${j*50}" y1="96" x2="${(j+1)*50}" y2="96"/>`:'').join('');
- return `<th class="h-hour" colspan="2">${rects?`<svg class="hour-accent" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${rects}</svg>`:''}<span class="hour-number">${h}</span></th>`}).join('')+'<th class="sleepiness-head">目覚めの眠気</th><th class="sleepiness-head">日中の眠気</th><th class="weight-head">体重<br>(kg)</th><th>出来事</th></tr></thead>';
+ return `<th class="h-hour" colspan="2">${rects?`<svg class="hour-accent" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${rects}</svg>`:''}<span class="hour-number">${h}</span></th>`}).join('')+'<th class="sleepiness-head">目覚めの眠気</th><th class="sleepiness-head">日中の眠気</th><th class="weight-head">体重<br>(kg)</th><th class="event-head">出来事</th></tr></thead>';
  let body='';for(let d=1;d<=n;d++){
   const date=dateString(y,m,d),a=state.days[date]||freshDay(),wd=weekday(y,m,d),cl=wd==='日'?'sunday':wd==='土'?'saturday':'';
   body+=`<tr class="selectday" data-date="${date}"><td class="date-cell ${cl}">${d}（${wd}）</td>`;
@@ -188,7 +188,16 @@ async function show(tab){if(tab==='report'||tab==='analysis')await loadMonth(sta
  if(tab==='report')renderChart();if(tab==='input')renderInput();if(tab==='settings')renderSettings();if(tab==='analysis')await renderAnalysis();window.scrollTo({top:0,behavior:'instant'});
 }
 function fillTimes(){const options=Array.from({length:49},(_,i)=>`<option value="${time(i)}">${time(i)}</option>`).join('');$$('#entry-start,#entry-end,#habit-bed,#habit-wake').forEach(el=>el.innerHTML=options);$('#entry-start').value='23:00';$('#entry-end').value='23:30'}
-function renderModes(){$$('.mode').forEach(b=>b.classList.toggle('active',b.dataset.mode===selectedMode));$('#medicine-selector').style.display=selectedMode==='med'?'flex':'none';$('#entry-end').disabled=['med','bed','wake'].includes(selectedMode);$('#entry-help').textContent=['med','bed','wake'].includes(selectedMode)?'開始時刻のマスに記号を追加します。':selectedMode==='erase'?'指定時間の熟睡・休息・◎服薬・△就寝・▽起床を消去します。同時刻を指定すると30分枠だけ消去します。':'開始から終了まで記録。翌日にまたがる指定もできます。'}
+function renderModes(){
+ $$('.mode').forEach(b=>b.classList.toggle('active',b.dataset.mode===selectedMode));
+ const single=['med','bed','wake','meal'].includes(selectedMode);
+ $('#medicine-selector').classList.toggle('site-hidden',selectedMode!=='med');
+ $('#entry-end-field').classList.toggle('site-hidden',single);
+ $('#entry-time-row').classList.toggle('single-time',single);
+ $('#entry-start-label').textContent=single?'時刻':'開始時刻';
+ $('#entry-end').disabled=single;
+ $('#entry-help').textContent=single?'指定した時刻に記号を付けます。':selectedMode==='erase'?'選択した範囲の熟睡・休息・◎服薬・△就寝・▽起床・□食事を消去します。同じ時刻なら30分枠を消去します。':'開始から終了まで記録します。翌日にまたがる指定もできます。';
+}
 function renderSleepiness(el,key){const d=dayData(state.selected);$(el).innerHTML=['無','弱','強'].map(x=>`<button type="button" class="chip ${d[key]===x?'active':''}" data-value="${x}">${x}</button>`).join('');$(el).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const old=d[key];d[key]=b.dataset.value;action(b,async()=>{try{await persistDay(state.selected);renderSleepiness(el,key);renderDayPreview();renderChart()}catch(e){d[key]=old;throw e}})}))}
 function renderInput(){$('#entry-date').value=state.selected;const a=dayData(state.selected);renderSleepiness('#wake-sleepiness','wakeSleepiness');renderSleepiness('#day-sleepiness','daySleepiness');$('#day-note').value=a.note||'';$('#day-weight').value=validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1);
  let meds=state.medicines.filter(m=>(!m.start||m.start<=state.selected)&&(!m.end||m.end>=state.selected));if(!meds.length)meds=state.medicines;
@@ -211,7 +220,7 @@ function renderDayPreview(){
   return `<div class="quick-slot ${kind}" title="${time(i)} ${kind==='sleep'?'熟睡':kind==='rest'?'休息':''}">${printPattern(kind)}<span class="markers">${symbols}</span></div>`
  }).join('');
  const sorted=(a.markers||[]).map((v,i)=>({...v,originalIndex:i})).sort((x,y)=>x.slot-y.slot);
- $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'△ 就寝',wake:'▽ 起床'}[x.type]} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
+ $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'△ 就寝',wake:'▽ 起床',meal:'□ 食事'}[x.type]} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
  const summary=[];
  const sleeps=rangesForDay(a,'sleep'), rests=rangesForDay(a,'rest');
  if(sleeps.length)summary.push(['熟睡',sleeps.join('、')]);
@@ -232,7 +241,7 @@ function eraseTimedEntries(day,from,to){
 }
 async function applyEntry(){await action($('#add-entry'),async()=>{
  const date=state.selected,start=idx($('#entry-start').value),requestedEnd=idx($('#entry-end').value);
- const symbols=['med','bed','wake'].includes(selectedMode),erasing=selectedMode==='erase';
+ const symbols=['med','bed','wake','meal'].includes(selectedMode),erasing=selectedMode==='erase';
  if(!Number.isInteger(start)||start<0||start>=48){toast('開始時刻は00:00〜23:30を選んでください');return}
  if(!Number.isInteger(requestedEnd)||requestedEnd<0||requestedEnd>48){toast('終了時刻を確認してください');return}
  if(!symbols&&!erasing&&start===requestedEnd){toast('開始と終了は別の時刻を選択してください');return}
@@ -245,6 +254,8 @@ async function applyEntry(){await action($('#add-entry'),async()=>{
  const a=dayData(date);
  if(symbols){
   const marker={slot:start,type:selectedMode};
+  // 同じ種類・時刻の重複登録は避ける。別の記号は同じ時刻にも登録可能。
+  if(a.markers.some(x=>x.slot===start&&x.type===selectedMode)){toast('この時刻には既に同じ記号があります');return}
   if(selectedMode==='med')marker.medId=$('#selected-medicine').value;
   a.markers.push(marker);
  }else if(erasing){
@@ -283,7 +294,7 @@ async function renderAnalysis(){const days=getRange();if(currentUser?.emailVerif
  $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${x[0]}</small><strong>${x[1]}</strong><p>${x[2]}</p></div>`).join('');$('#analysis-title').textContent=analysisView==='daily'?`${state.selected} の記録`:analysisView==='weekly'?'直近7日間の睡眠記録':`${state.month.replace('-','年')}月の睡眠記録`;
  $('#analysis-bars').innerHTML=days.map(k=>{const a=state.days[k],v=(a?.slots||[]).filter(x=>x==='sleep').length*30;return `<div class="baritem"><div>${k.slice(5)}</div><div class="barbg"><div class="barvalue" style="width:${Math.min(100,v/1440*100)}%"></div></div><strong>${a?fmt(v):'未入力'}${a&&validWeight(a.weight)!==null?' / '+validWeight(a.weight).toFixed(1)+'kg':''}</strong></div>`}).join('')||'<span class="muted">まだ記録がありません</span>';
 }
-function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}"><i class="color-dot" style="background:${t.accent}"></i>${t.name}</button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})));renderMedicineRows()}
+function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})));renderMedicineRows()}
 function syncMedicineInputs(){for(const row of $$('#medicine-rows .medicine-row')){const m=state.medicines.find(m=>m.id===row.dataset.id);if(m)row.querySelectorAll('input').forEach(i=>{m[i.dataset.key]=i.value})}}
 function renderMedicineRows(){const ms=state.medicines;$('#medicine-rows').innerHTML=ms.length?ms.map(m=>`<div class="medicine-row" data-id="${esc(m.id)}"><input aria-label="薬の名前" type="text" maxlength="80" data-key="name" value="${esc(m.name||'')}" placeholder="薬の名前"><input aria-label="服用開始日" type="date" data-key="start" value="${esc(m.start||'')}"><input aria-label="服用終了日" type="date" data-key="end" value="${esc(m.end||'')}"><button class="btn small danger" title="薬の行を削除" data-remove="${esc(m.id)}">×</button></div>`).join(''):'<span class="muted">まだ薬がありません。「＋ 薬を追加」から登録できます。</span>';
  $$('#medicine-rows button[data-remove]').forEach(b=>b.addEventListener('click',()=>{syncMedicineInputs();deletedMedicineIds.add(b.dataset.remove);state.medicines=state.medicines.filter(m=>m.id!==b.dataset.remove);renderMedicineRows()}))}
@@ -296,6 +307,100 @@ async function saveSettings(){await action($('#save-settings'),async()=>{
  for(const id of deletedMedicineIds)batch.delete(medRef(id));await batch.commit();state.settings={...state.settings,...newSettings};deletedMedicineIds.clear();renderSettings();renderChart();renderInput();toast('設定・服用薬情報を保存しました')
  });}
 function makeId(){return 'med-'+(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,10)}`)}
+
+/* A4横1枚のPDFを端末の印刷処理に依存せず、ブラウザ内で作成します。
+ * 文字・図形はCanvasへ描画し、1ページのJPEG画像としてPDFへ埋め込みます。
+ * 氏名・睡眠・服薬データはサーバーへ送らず、端末内でPDFを作成します。
+ */
+async function downloadOnePagePdf(){
+ const [year,month]=monthParts(state.month),numDays=new Date(year,month,0).getDate();
+ const W=2600,H=1838,cv=document.createElement('canvas');cv.width=W;cv.height=H;
+ const cx=cv.getContext('2d',{alpha:false});if(!cx)throw Error('PDF作成用の描画を開始できません');
+ cx.fillStyle='#fff';cx.fillRect(0,0,W,H);
+ const margin=42,tableW=W-2*margin,rowH=43,headH=57,top=164;
+ const dims=[145,...Array(48).fill(0),112,112,92,0];
+ const slotW=34;for(let i=1;i<=48;i++)dims[i]=slotW;
+ dims[dims.length-1]=tableW-dims.slice(0,-1).reduce((a,b)=>a+b,0);
+ const starts=[margin];dims.forEach(x=>starts.push(starts[starts.length-1]+x));
+ const tx=(str,x,y,font='20px sans-serif',fill='#26354a',align='left',max)=>{
+  cx.save();cx.font=font;cx.fillStyle=fill;cx.textAlign=align;cx.textBaseline='middle';
+  if(max){let s=String(str||'');while(s&&cx.measureText(s).width>max)s=s.slice(0,-1);if(s!==String(str||''))s+='…';cx.fillText(s,x,y)}
+  else cx.fillText(String(str||''),x,y);cx.restore();
+ };
+ const line=(x1,y1,x2,y2,color='#b4bfcd',width=1,dash=[])=>{cx.save();cx.strokeStyle=color;cx.lineWidth=width;cx.setLineDash(dash);cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();cx.restore()};
+ tx('睡眠日誌',margin,52,'bold 42px sans-serif');
+ tx(`${year}年${month}月`,margin+230,53,'bold 29px sans-serif');
+ tx(state.settings.name?`氏名：${state.settings.name}`:'氏名：　　　　　　　　　',margin,107,'24px sans-serif','#28364a', 'left',930);
+ tx(`記録期間：${year}年${month}月1日〜${numDays}日`,W-margin,107,'22px sans-serif','#40556d','right');
+ const theme=themes[state.settings.theme]||themes.blue;
+ cx.fillStyle='#eff3f8';cx.fillRect(margin,top,tableW,headH);
+ // 時間帯見出し：通常就寝時間帯だけを薄い黄色に
+ for(let i=0;i<48;i++)if(isHabit(i)){cx.fillStyle='#fff1c5';cx.fillRect(starts[i+1],top,slotW,headH)}
+ tx('日付・曜日',starts[0]+dims[0]/2,top+headH/2,'bold 18px sans-serif','#26354a','center');
+ for(let hr=0;hr<24;hr++)tx(String(hr),starts[1+hr*2]+slotW,top+headH/2,'bold 18px sans-serif','#26354a','center');
+ const extraStart=49;
+ ['目覚めの眠気','日中の眠気','体重(kg)','出来事'].forEach((label,j)=>tx(label,starts[extraStart+j]+dims[extraStart+j]/2,top+headH/2,j===3?'bold 18px sans-serif':'bold 14px sans-serif','#26354a','center'));
+ for(let d=1;d<=numDays;d++){
+  const key=dateString(year,month,d),a=state.days[key]||freshDay(),y=top+headH+(d-1)*rowH;
+  if(d%2===0){cx.fillStyle='#f3f7fc';cx.fillRect(margin,y,tableW,rowH)}
+  const wd=weekday(year,month,d);
+  tx(`${d}（${wd}）`,starts[0]+dims[0]/2,y+rowH/2,'bold 18px sans-serif',wd==='日'?'#a84252':wd==='土'?'#365b96':'#26354a','center');
+  for(let i=0;i<48;i++){
+   const cellX=starts[i+1],kind=a.slots?.[i];
+   if(kind==='sleep'){cx.fillStyle=theme.sleep;cx.fillRect(cellX+1,y+1,slotW-2,rowH-2)}
+   else if(kind==='rest')line(cellX+4,y+rowH-4,cellX+slotW-4,y+4,'#202b37',6);
+   const marks=(a.markers||[]).filter(x=>x.slot===i);
+   for(let k=0;k<marks.length;k++){
+    const m=marks[k],total=Math.min(marks.length,3),symbolX=cellX+slotW/2+(k-(total-1)/2)*9,cy=y+rowH/2;
+    cx.save();cx.strokeStyle=kind==='sleep'?'#ffffff':'#182531';cx.lineWidth=2.3;cx.beginPath();
+    if(m.type==='med'){cx.arc(symbolX,cy,5.2,0,Math.PI*2);cx.moveTo(symbolX+2.3,cy);cx.arc(symbolX,cy,2.3,0,Math.PI*2)}
+    if(m.type==='bed'){cx.moveTo(symbolX,cy-7);cx.lineTo(symbolX+6.5,cy+6);cx.lineTo(symbolX-6.5,cy+6);cx.closePath()}
+    if(m.type==='wake'){cx.moveTo(symbolX-6.5,cy-6);cx.lineTo(symbolX+6.5,cy-6);cx.lineTo(symbolX,cy+7);cx.closePath()}
+    if(m.type==='meal'){cx.rect(symbolX-6,cy-6,12,12)}
+    cx.stroke();cx.restore();
+   }
+  }
+  const extras=[a.wakeSleepiness||'',a.daySleepiness||'',validWeight(a.weight)!==null?validWeight(a.weight).toFixed(1):''];
+  extras.forEach((val,j)=>tx(val,starts[extraStart+j]+dims[extraStart+j]/2,y+rowH/2,'18px sans-serif','#26354a','center'));
+  tx(a.note||'',starts[extraStart+3]+8,y+rowH/2,'17px sans-serif','#26354a','left',dims[extraStart+3]-16);
+  line(margin,y+rowH,margin+tableW,y+rowH,'#c3ccd7',1);
+ }
+ // 24時間枠は実線、30分境界は点線
+ for(let i=0;i<=53;i++){
+  const x=starts[i];
+  if(i===0||i===53||i>=49||i%2===1){line(x,top,x,top+headH+numDays*rowH,'#a1adbc',1.5)}
+  else{line(x,top,x,top+headH+numDays*rowH,'#b8c3d0',1,[3,4])}
+ }
+ line(margin,top,margin+tableW,top,'#8e9aa8',2);line(margin,top+headH,margin+tableW,top+headH,'#8e9aa8',2);
+ const footerY=top+headH+numDays*rowH+25;
+ tx('■ 熟睡',margin,footerY,'21px sans-serif');tx('╱ 休息（布団の中）',margin+135,footerY,'21px sans-serif');
+ tx('◎ 服薬',margin+445,footerY,'21px sans-serif');tx('△ 就寝',margin+590,footerY,'21px sans-serif');
+ tx('▽ 起床',margin+730,footerY,'21px sans-serif');tx('□ 食事',margin+870,footerY,'21px sans-serif');
+ tx('黄色の時間見出し：通常の睡眠時間帯',margin+1050,footerY,'19px sans-serif','#40556d');
+ const activeMeds=state.medicines.filter(m=>m.name&&(!m.start||m.start<=dateString(year,month,numDays))&&(!m.end||m.end>=dateString(year,month,1)));
+ const note=activeMeds.length?'服用薬・変更履歴：'+activeMeds.map(m=>`${m.name}（${m.start||'開始日未設定'}${m.end?'～'+m.end:''}）`).join('／'):'服用薬・変更履歴：記録なし';
+ tx(note,margin,footerY+42,'20px sans-serif','#526177','left',tableW-20);
+ tx('© 2021–2026 Dobhar-chú',W-margin,H-34,'17px sans-serif','#6d7b90','right');
+ const base64=cv.toDataURL('image/jpeg',0.92).split(',')[1],raw=atob(base64),jpeg=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)jpeg[i]=raw.charCodeAt(i);
+ const encoder=new TextEncoder(),chunks=[],offsets=[0];let pos=0;
+ function append(b){chunks.push(b);pos+=b.length}
+ function a(s){append(encoder.encode(s))}
+ a('%PDF-1.4\n');
+ const obj=(id,content)=>{offsets[id]=pos;a(`${id} 0 obj\n${content}\nendobj\n`)};
+ obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+ obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+ obj(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 841.89 595.28] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>');
+ offsets[4]=pos;a(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`);append(jpeg);a('\nendstream\nendobj\n');
+ const stream='q\n841.89 0 0 595.28 0 0 cm\n/Im1 Do\nQ\n';
+ obj(5,`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}endstream`);
+ const xref=pos;a('xref\n0 6\n0000000000 65535 f \n');for(let id=1;id<=5;id++)a(String(offsets[id]).padStart(10,'0')+' 00000 n \n');
+ a(`trailer\n<< /Root 1 0 R /Size 6 >>\nstartxref\n${xref}\n%%EOF`);
+ const data=new Blob(chunks,{type:'application/pdf'}),url=URL.createObjectURL(data),link=document.createElement('a');
+ link.href=url;link.download=`睡眠日誌_${year}-${String(month).padStart(2,'0')}.pdf`;
+ document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+ toast('A4横・1ページのPDFを作成しました');
+}
+
 // 認証
 $('#register-button').addEventListener('click',register);$('#login-button').addEventListener('click',login);$('#reset-password-button').addEventListener('click',passwordResetFromAuth);
 $('#auth-password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
@@ -306,8 +411,13 @@ $('#change-email').addEventListener('click',changeEmail);$('#reset-signed-passwo
 // 日誌
 fillTimes();$$('.tab').forEach(b=>b.addEventListener('click',()=>action(null,()=>show(b.dataset.tab))));
 $('#jump-month').addEventListener('change',e=>action(e.target,()=>jumpMonth(e.target.value)));$('#prev-month').addEventListener('click',()=>action($('#prev-month'),()=>monthShift(-1)));$('#next-month').addEventListener('click',()=>action($('#next-month'),()=>monthShift(1)));
-$('#open-guide').addEventListener('click',()=>$('#guide-dialog').showModal());$('#close-guide').addEventListener('click',()=>$('#guide-dialog').close());$('#guide-dialog').addEventListener('click',e=>{if(e.target.id==='guide-dialog')e.target.close()});$('#back-to-chart').addEventListener('click',()=>action(null,()=>show('report')));
-$('#print-button').addEventListener('click',()=>{renderChart();window.print()});
+$('#open-guide').addEventListener('click',()=>$('#guide-dialog').showModal());$('#close-guide').addEventListener('click',()=>$('#guide-dialog').close());$('#guide-dialog').addEventListener('click',e=>{if(e.target.id==='guide-dialog')e.target.close()});
+$('#print-button').addEventListener('click',()=>{
+ // スマートフォンの印刷メニューはA4の向き・改ページが端末依存のため、1枚のPDFを保存してから印刷する。
+ if(window.matchMedia('(max-width:850px)').matches){action($('#print-button'),async()=>{await downloadOnePagePdf();toast('保存したPDFを開いて印刷してください')});return}
+ renderChart();window.print();
+});
+$('#download-pdf').addEventListener('click',()=>action($('#download-pdf'),downloadOnePagePdf));
 $$('.mode').forEach(b=>b.addEventListener('click',()=>{selectedMode=b.dataset.mode;renderModes()}));
 $('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(val)){toast('日付を正しく指定してください');e.target.value=state.selected;return}action(null,async()=>{await loadMonth(val.slice(0,7));state.selected=val;state.month=val.slice(0,7);renderInput();renderChart()})});
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
