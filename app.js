@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.2 (2026-11-02) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.3 (2026-11-02) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -64,15 +64,15 @@ function errMsg(e){
  'auth/weak-password':'パスワードは6文字以上にしてください。',
  'auth/too-many-requests':'試行回数が多いため、しばらくしてからお試しください。',
  'auth/requires-recent-login':'もう一度ログインしてから操作してください。',
- 'auth/unauthorized-domain':'このサイトのドメインをFirebase Authenticationの承認済みドメインに追加してください。',
+ 'auth/unauthorized-domain':'現在ログインできません。運営者へお問い合わせください。',
  'auth/network-request-failed':'インターネット接続を確認してください。',
- 'permission-denied':'保存の権限がありません。メール認証状態とFirestoreのルールを確認してください。',
+ 'permission-denied':'記録の保存ができませんでした。ログイン状態をご確認ください。',
  'unavailable':'通信できませんでした。接続を確認して再度お試しください。'
  };
- return codes[e?.code]||`操作に失敗しました（${e?.code||'通信エラー'}）。再度お試しください。`;
+ return codes[e?.code]||'操作を完了できませんでした。再度お試しください。';
 }
 async function action(btn,run){if(busy)return;busy=true;const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='処理中…'}try{await run()}catch(e){console.error('睡眠日誌操作エラー',e);toast(errMsg(e))}finally{busy=false;if(btn){btn.disabled=false;btn.textContent=old}}}
-function view(which){if(which==='verify-view')startAutoVerification();else stopAutoVerification();for(const name of ['auth-view','verify-view','app-view','loading-screen'])$('#'+name).classList.toggle('site-hidden',name!==which);$('#logout-button').classList.toggle('site-hidden',which!=='app-view');$('#user-indicator').classList.toggle('site-hidden',which!=='app-view')}
+function view(which){if(which==='verify-view')startAutoVerification();else stopAutoVerification();for(const name of ['auth-view','verify-view','app-view','loading-screen'])$('#'+name).classList.toggle('site-hidden',name!==which);$('#logout-button').classList.toggle('site-hidden',which!=='app-view')}
 // 外部ブラウザや別端末で認証しても、開いているアプリが自動検知する。
 function stopAutoVerification(){if(verifyTimer){clearInterval(verifyTimer);verifyTimer=null}}
 function startAutoVerification(){stopAutoVerification();verifyTimer=setInterval(()=>{if(document.visibilityState==='visible')refreshVerificationSilently()},4500)}
@@ -116,13 +116,13 @@ async function persistSettings(){assertSession();const {name,habitBed,habitWake,
 async function accountState(u){
  const epoch=++sessionEpoch;
  currentUser=u;
- if(!u){view('auth-view');$('#user-indicator').textContent='';return}
+ if(!u){view('auth-view');return}
  view('loading-screen');
  try{await reload(u);await getIdToken(u,true)}catch(e){console.warn('refresh auth',e)}
  if(epoch!==sessionEpoch)return;
  if(!u.emailVerified){$('#verify-email-value').textContent=u.email||'';view('verify-view');return}
  try{await loadInitial();if(epoch!==sessionEpoch)return;
-   $('#account-email').textContent=u.email||'';$('#user-indicator').textContent=u.email||'';view('app-view');
+   $('#account-email').textContent=u.email||'';view('app-view');
  }catch(e){if(epoch!==sessionEpoch)return;console.error(e);notice(errMsg(e));view('auth-view');}
 }
 onAuthStateChanged(auth,accountState);
