@@ -6,10 +6,18 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="light" name="color-scheme"/>
 <title>睡眠日誌｜Dobhar-chú</title>
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico?v=1.0.5"/>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=1.0.5"/>
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1.0.5"/>
+<link rel="manifest" href="assets/site.webmanifest?v=1.0.5"/>
+<meta name="theme-color" content="#2f6945"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="睡眠日誌"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 
-<link href="styles.css?v=1.0.4" rel="stylesheet"/></head>
+<link href="styles.css?v=1.0.5" rel="stylesheet"/></head>
 <body>
-<header class="topbar"><div class="topinner"><div><div class="brand">睡眠日誌</div></div><div style="display:flex;gap:8px;align-items:center"><button class="btn small site-hidden" id="logout-button">ログアウト</button></div></div></header><section class="auth-wrap site-hidden" id="auth-view"><div class="auth-card"><h1>睡眠日誌にログイン</h1><div class="auth-grid"><label for="auth-email">メールアドレス</label><input autocomplete="username" id="auth-email" placeholder="example@example.com" required="" type="email"/><label for="auth-password">パスワード（6文字以上）</label><input autocomplete="current-password" id="auth-password" minlength="6" placeholder="パスワード" required="" type="password"/></div><div class="auth-btns"><button class="btn primary" id="login-button">ログイン</button><button class="btn" id="register-button">新規登録</button></div><div class="auth-btns"><button class="btn" id="reset-password-button">パスワードを忘れた場合</button></div><div id="auth-notice" role="status"></div></div></section><section class="verify-view site-hidden" id="verify-view"><h2>メールアドレスの確認が必要です</h2><p>メールに届いた確認リンクを開いてください。認証完了後、自動的に月間睡眠表へ進みます。</p><p class="account-email" id="verify-email-value"></p><div class="actions"><span class="verify-status" id="verify-status" role="status">メール認証を確認しています…</span><button class="btn" id="resend-verified">確認メールを再送信</button><button class="btn" id="verify-logout">ログアウト</button></div><p class="muted">メールが届かない場合は迷惑メールフォルダーもご確認ください。</p></section><div id="loading-screen">ログイン状態を確認しています…</div>
+<header class="topbar"><div class="topinner"><div><div class="brand"><img src="assets/sleep-diary-logo.png?v=1.0.5" class="brand-logo" alt="睡眠日誌" width="168" height="56"/></div></div><div style="display:flex;gap:8px;align-items:center"><button class="btn small site-hidden" id="logout-button">ログアウト</button></div></div></header><section class="auth-wrap site-hidden" id="auth-view"><div class="auth-card"><h1>睡眠日誌にログイン</h1><div class="auth-grid"><label for="auth-email">メールアドレス</label><input autocomplete="username" id="auth-email" placeholder="example@example.com" required="" type="email"/><label for="auth-password">パスワード（6文字以上）</label><input autocomplete="current-password" id="auth-password" minlength="6" placeholder="パスワード" required="" type="password"/></div><div class="auth-btns"><button class="btn primary" id="login-button">ログイン</button><button class="btn" id="register-button">新規登録</button></div><div class="auth-btns"><button class="btn" id="reset-password-button">パスワードを忘れた場合</button></div><div id="auth-notice" role="status"></div></div></section><section class="verify-view site-hidden" id="verify-view"><h2>メールアドレスの確認が必要です</h2><p>メールに届いた確認リンクを開いてください。認証完了後、自動的に月間睡眠表へ進みます。</p><p class="account-email" id="verify-email-value"></p><div class="actions"><span class="verify-status" id="verify-status" role="status">メール認証を確認しています…</span><button class="btn" id="resend-verified">確認メールを再送信</button><button class="btn" id="verify-logout">ログアウト</button></div><p class="muted">メールが届かない場合は迷惑メールフォルダーもご確認ください。</p></section><div id="loading-screen">ログイン状態を確認しています…</div>
 <div class="shell site-hidden" id="app-view">
 
 <nav aria-label="アプリ画面切替" class="tabs no-print"><button class="tab active" data-tab="report">▦ 月間睡眠表</button><button class="tab" data-tab="input">✎ 記録を登録</button><button class="tab" data-tab="analysis">▥ 睡眠分析</button><button class="tab" data-tab="settings">⚙ ユーザー設定</button></nav>
@@ -35,7 +43,7 @@
 <button class="mode" data-mode="erase"><strong>× 消去</strong><span>指定時間の記録を消す</span></button></div>
 <h2>時間を選ぶ</h2>
 <div class="form-row" id="entry-time-row"><div class="field"><label id="entry-start-label" for="entry-start">開始時刻</label><select id="entry-start"></select></div><div class="field" id="entry-end-field"><label for="entry-end">終了時刻</label><select id="entry-end"></select></div></div>
-<div class="field" id="medicine-selector"><label for="selected-medicine">服用した薬（服薬時のみ）</label><select id="selected-medicine"></select></div>
+<div class="medication-entry-fields" id="medicine-selector"><div class="field"><label for="selected-medicine">服用した薬</label><select id="selected-medicine"></select></div><div class="field"><label for="tablet-count">服用した錠数</label><select id="tablet-count"><option value="0.5">半錠（0.5錠）</option><option value="1" selected>1錠</option><option value="2">2錠</option><option value="3">3錠</option><option value="4">4錠</option></select></div></div>
 <div class="actions"><button class="btn primary" id="add-entry">選択した内容を記録</button><span class="muted" id="entry-help">開始～終了の時間枠を登録します。</span></div></div>
 <div><div class="panel"><h2>体重・眠気・出来事を記録</h2><div class="field"><label>目覚めの眠気</label><div class="chipgrid" id="wake-sleepiness"></div></div><div class="field"><label>日中の眠気</label><div class="chipgrid" id="day-sleepiness"></div></div><div class="field"><label for="day-weight">体重（kg・0.1kg単位）</label><input id="day-weight" type="number" min="0.1" max="500" step="0.1" inputmode="decimal" placeholder="例：62.5"/><span class="assist">空欄で保存すると、その日の体重記録を削除します。</span></div><div class="field"><label for="day-note">出来事・体調など</label><textarea id="day-note" placeholder="例：午後に散歩／通院／昼寝／寝つきが悪かった"></textarea><span class="assist"></span></div><button class="btn primary" id="save-day">体重・眠気・出来事を保存</button></div><div class="panel"><h2>この日の記録</h2><div class="quicktimeline" id="quicktimeline"></div><div class="quick-hourlabels"><span>0時</span><span>6時</span><span>12時</span><span>18時</span><span>24時</span></div><div class="statrow" style="grid-template-columns:repeat(2,1fr);margin:15px 0"><div class="smallstat"><span>記録した睡眠時間</span><b id="day-duration">—</b></div><div class="smallstat"><span>休息時間</span><b id="day-rest">—</b></div></div><div class="marker-list" id="marker-list"></div><div class="daily-summary" id="daily-summary" aria-live="polite"></div></div></div>
 </div></section>
@@ -55,5 +63,5 @@
 <footer class="appfooter no-print">© 2021–2026 Dobhar-chú</footer>
 </div><div class="toaster" id="toast" role="status"></div>
 
-<script src="app.js?v=1.0.4" type="module"></script></body>
+<script src="app.js?v=1.0.5" type="module"></script></body>
 </html>

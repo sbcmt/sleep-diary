@@ -230,3 +230,13 @@
 #picker-clear{margin-right:auto}
 @media(max-width:370px){.date-picker-dialog{padding:12px}.picker-month-controls{grid-template-columns:34px minmax(0,1fr) minmax(0,0.8fr) 34px}}
 @media print{.date-picker-dialog{display:none!important}}
+
+/* v1.0.5: ホーム画面アイコン・テキストロゴ・錠数選択 */
+.brand-logo{display:block;height:40px;width:auto;max-width:min(64vw,190px);object-fit:contain;object-position:left center}
+.topbar .brand{display:flex;align-items:center;min-width:0}
+.medication-entry-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,150px);gap:10px}
+.medication-entry-fields .field{min-width:0}
+.medication-entry-fields select{max-width:100%}
+@media(max-width:480px){.brand-logo{height:34px;max-width:52vw}.medication-entry-fields{grid-template-columns:minmax(0,1fr) minmax(0,135px)}}
+@media(max-width:360px){.medication-entry-fields{grid-template-columns:1fr}}
+@media print{.brand-logo{display:none!important}}

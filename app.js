@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.4 (2026-11-02) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.5 (2026-11-02) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -50,6 +50,12 @@ function monthParts(month){return month.split('-').map(Number)}
 function weekday(y,m,d){return ['日','月','火','水','木','金','土'][new Date(y,m-1,d).getDay()]}
 function nextDay(key){const d=new Date(`${key}T12:00:00`);d.setDate(d.getDate()+1);return iso(d)}
 function freshDay(){return {slots:Array(48).fill(''),markers:[],wakeSleepiness:'',daySleepiness:'',note:'',weight:null}}
+// 既存の記録の錠数を勝手に1錠とみなさず、未入力のまま保つ。
+function validTablets(value){const n=Number(value);return value!=null&&value!==''&&[0.5,1,2,3,4].includes(n)?n:null}
+function tabletsLabel(value){const n=validTablets(value);return n===null?'錠数未登録':n===0.5?'半錠':`${n}錠`}
+function medicationName(marker){return state.medicines.find(m=>m.id===marker.medId)?.name||'服用薬未設定'}
+function medicationDetail(marker){return `${medicationName(marker)}・${tabletsLabel(marker.tablets)}`}
+
 const state={month:iso(new Date()).slice(0,7),selected:iso(new Date()),settings:blankSettings(),days:{},medicines:[],loadedMonths:new Set()};
 let selectedMode='sleep',analysisView='daily',currentUser=null, sessionEpoch=0, deletedMedicineIds=new Set(), busy=false, verifyTimer=null, checkingVerification=false;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
@@ -173,8 +179,8 @@ function renderChart(){
   const date=dateString(y,m,d),a=state.days[date]||freshDay(),wd=weekday(y,m,d),cl=wd==='日'?'sunday':wd==='土'?'saturday':'';
   body+=`<tr class="selectday" data-date="${date}"><td class="date-cell ${cl}">${d}（${wd}）</td>`;
   for(let i=0;i<48;i++){
-   const kind=['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:'',mark=(a.markers||[]).filter(x=>x.slot===i).map(x=>markerSVG(x.type)).join('');
-   body+=`<td class="slot ${kind} ${i%2?'hour-end':''}" title="${date} ${time(i)}${kind?' '+(kind==='sleep'?'熟睡':'休息'):''}">${printPattern(kind)}<span class="markers">${mark}</span></td>`;
+   const kind=['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:'',matches=(a.markers||[]).filter(x=>x.slot===i),mark=matches.map(x=>markerSVG(x.type)).join(''),details=matches.map(x=>x.type==='med'?`◎ 服薬（${medicationDetail(x)}）`:{bed:'△ 就寝',wake:'▽ 起床',meal:'□ 食事'}[x.type]).filter(Boolean).join('、');
+   body+=`<td class="slot ${kind} ${i%2?'hour-end':''}" title="${date} ${time(i)}${kind?' '+(kind==='sleep'?'熟睡':'休息'):''}${details?' '+esc(details):''}">${printPattern(kind)}<span class="markers">${mark}</span></td>`;
   }
   body+=`<td class="extra">${esc(a.wakeSleepiness||'')}</td><td class="extra">${esc(a.daySleepiness||'')}</td><td class="weight-cell">${validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1)}</td><td class="event-cell" title="${esc(a.note||'')}">${esc(a.note||'')}</td></tr>`;
  }
@@ -216,11 +222,11 @@ function renderDayPreview(){
  $('#day-duration').textContent=minutes(a,'sleep');$('#day-rest').textContent=minutes(a,'rest');
  $('#quicktimeline').innerHTML=Array.from({length:48},(_,i)=>{
   const kind=['sleep','rest'].includes(a.slots[i])?a.slots[i]:'';
-  const symbols=(a.markers||[]).filter(x=>x.slot===i).map(x=>markerSVG(x.type)).join('');
-  return `<div class="quick-slot ${kind}" title="${time(i)} ${kind==='sleep'?'熟睡':kind==='rest'?'休息':''}">${printPattern(kind)}<span class="markers">${symbols}</span></div>`
+  const slotMarkers=(a.markers||[]).filter(x=>x.slot===i),symbols=slotMarkers.map(x=>markerSVG(x.type)).join(''),detail=slotMarkers.filter(x=>x.type==='med').map(medicationDetail).join('、');
+  return `<div class="quick-slot ${kind}" title="${time(i)} ${kind==='sleep'?'熟睡':kind==='rest'?'休息':''}${detail?' 服薬：'+esc(detail):''}">${printPattern(kind)}<span class="markers">${symbols}</span></div>`
  }).join('');
  const sorted=(a.markers||[]).map((v,i)=>({...v,originalIndex:i})).sort((x,y)=>x.slot-y.slot);
- $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'△ 就寝',wake:'▽ 起床',meal:'□ 食事'}[x.type]} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
+ $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'△ 就寝',wake:'▽ 起床',meal:'□ 食事'}[x.type]}${x.type==='med'?'（'+esc(medicationDetail(x))+'）':''} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
  const summary=[];
  const sleeps=rangesForDay(a,'sleep'), rests=rangesForDay(a,'rest');
  if(sleeps.length)summary.push(['熟睡',sleeps.join('、')]);
@@ -255,9 +261,14 @@ async function applyEntry(){await action($('#add-entry'),async()=>{
  if(symbols){
   const marker={slot:start,type:selectedMode};
   // 同じ種類・時刻の重複登録は避ける。別の記号は同じ時刻にも登録可能。
-  if(a.markers.some(x=>x.slot===start&&x.type===selectedMode)){toast('この時刻には既に同じ記号があります');return}
-  if(selectedMode==='med')marker.medId=$('#selected-medicine').value;
-  a.markers.push(marker);
+  if(selectedMode==='med'){
+   const previous=a.markers.find(x=>x.slot===start&&x.type==='med'&&x.medId===$('#selected-medicine').value);
+   if(previous){previous.tablets=validTablets($('#tablet-count').value);if(previous.tablets===null){toast('錠数を選択してください');return}
+    // 錠数修正は新しい行を増やさず、保存処理へ進む。
+    marker.skipPush=true;}
+  }else if(a.markers.some(x=>x.slot===start&&x.type===selectedMode)){toast('この時刻には既に同じ記号があります');return}
+  if(selectedMode==='med'){marker.medId=$('#selected-medicine').value;marker.tablets=validTablets($('#tablet-count').value);if(marker.tablets===null){toast('錠数を選択してください');return}}
+  if(!marker.skipPush)a.markers.push(marker);
  }else if(erasing){
   eraseTimedEntries(a,start,end>start?end:48);
   if(end<start)eraseTimedEntries(dayData(next),0,end);
@@ -358,6 +369,10 @@ async function downloadOnePagePdf(){
     if(m.type==='wake'){cx.moveTo(symbolX-6.5,cy-6);cx.lineTo(symbolX+6.5,cy-6);cx.lineTo(symbolX,cy+7);cx.closePath()}
     if(m.type==='meal'){cx.rect(symbolX-6,cy-6,12,12)}
     cx.stroke();cx.restore();
+    // 1つの時刻に服用薬が1種類の場合は、錠数を◎の下に併記する。
+    if(m.type==='med'&&marks.filter(x=>x.type==='med').length===1&&validTablets(m.tablets)!==null){
+      tx(validTablets(m.tablets)===0.5?'½':String(validTablets(m.tablets)),cellX+slotW/2,y+rowH-7,'bold 13px sans-serif',kind==='sleep'?'#ffffff':'#17283a','center');
+    }
    }
   }
   const extras=[a.wakeSleepiness||'',a.daySleepiness||'',validWeight(a.weight)!==null?validWeight(a.weight).toFixed(1):''];
