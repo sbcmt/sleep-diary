@@ -240,3 +240,33 @@
 @media(max-width:480px){.brand-logo{height:34px;max-width:52vw}.medication-entry-fields{grid-template-columns:minmax(0,1fr) minmax(0,135px)}}
 @media(max-width:360px){.medication-entry-fields{grid-template-columns:1fr}}
 @media print{.brand-logo{display:none!important}}
+
+
+/* Ver.1.0.6 — iPhone/Android: 画面の自動拡大・横はみ出し防止。
+   入力欄のフォーカスによるiOS Safariの拡大を防止し、
+   表だけを水平方向にスクロール可能にする。印刷レイアウトには適用しない。 */
+@media screen {
+  html, body { width:100%; max-width:100%; min-width:0; overflow-x:clip; }
+  .topbar, .topinner, .shell, .screen, .panel, .chart-scroll, .tabs {
+    min-width:0;
+    max-width:100%;
+  }
+  .chart-scroll {
+    width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+  }
+  .sleep-table { max-width:none; }
+}
+@media screen and (max-width:850px) {
+  /* iPhone Safariはフォーカス時に16px未満の入力欄をズームすることがある。 */
+  input:not([type="hidden"]), select, textarea {
+    font-size:16px !important;
+  }
+  .shell, .topinner { width:100%; max-width:100%; }
+  .tabs { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .pagehead, .chart-head, .month-nav { min-width:0; max-width:100%; }
+  .month-nav { flex-wrap:wrap; }
+  .auth-grid input, .field input, .field select, .field textarea { max-width:100%; }
+}
