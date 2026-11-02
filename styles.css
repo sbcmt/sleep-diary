@@ -62,3 +62,77 @@
  .swatch.sleep{background:var(--sleep)!important}
  .swatch.rest{background:repeating-linear-gradient(135deg,#fff 0 1px,var(--accent) 1px 2.3px,#fff 2.3px 4px)!important}
 }
+
+/* v1.0.1: 入力幅・見方ガイド・白黒に頼らない表現・交互行 */
+:root{--slot:22px;--sleepcol:110px;--notecol:176px}
+.field{min-width:0;width:100%}
+#entry-date,#first-month,.field input[type="date"],.field input[type="month"]{display:block;min-width:0;width:100%;max-width:100%;box-sizing:border-box}
+.month-nav{flex-wrap:wrap}.jump-month-label{font-size:12px;color:#536174;font-weight:700;margin-left:6px}.jump-month{width:145px;max-width:100%;height:36px;padding:6px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--ink)}
+.sleep-table .extra{white-space:nowrap;font-size:12px;font-weight:600}
+.sleep-table thead .sleepiness-head{white-space:nowrap;font-size:11px}
+.sleep-table .event-cell{white-space:normal;overflow:hidden;overflow-wrap:anywhere;vertical-align:middle;line-height:1.15;max-height:26px;font-size:11px;padding:2px 7px}
+.sleep-table tbody tr:nth-child(even) td:not(.slot.sleep):not(.date-cell){background-color:#f3f7fc}
+.sleep-table tbody tr:nth-child(even) td.date-cell:not(.saturday):not(.sunday){background:#eef3fa}
+.sleep-table tbody tr:nth-child(even) td.sunday{background:#faeaf0}
+.sleep-table tbody tr:nth-child(even) td.saturday{background:#eaf2fd}
+.sleep-table .slot.rest,.quicktimeline .quick-slot.rest{background:transparent!important}
+.sleep-table .slot .print-glyph.rest-glyph,.quicktimeline .print-glyph.rest-glyph{display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+.sleep-table .slot .markers{z-index:2}
+.swatch.rest{background:white;position:relative;overflow:hidden}
+.swatch.rest::before{content:"";position:absolute;height:3px;background:#27313d;width:22px;left:-3px;top:5px;transform:rotate(-42deg)}
+.quicktimeline{grid-template-columns:repeat(48,minmax(0,1fr));height:40px}
+.quicktimeline .quick-slot{min-width:0;position:relative;border-right:1px solid #d0d9e5;overflow:visible}
+.quicktimeline .quick-slot:nth-child(even){border-right:1px solid #8896aa}
+.quicktimeline .quick-slot.sleep{background:var(--sleep)}
+.quicktimeline .quick-slot .markers{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:3}
+.quicktimeline .marker-icon{width:11px;height:11px;background:white;border-radius:50%;stroke:#1e2732;stroke-width:2.6}
+.daily-summary{display:grid;gap:7px;border-top:1px solid var(--border);padding-top:13px;margin-top:12px}
+.summary-line{display:grid;grid-template-columns:88px minmax(0,1fr);gap:9px;align-items:start;font-size:12px;white-space:normal;overflow-wrap:anywhere}
+.summary-line strong{color:var(--accent)}
+.verify-status{color:var(--accent);padding:8px 0;font-weight:750;font-size:13px}
+.guide-dialog{position:fixed;max-width:min(95vw,600px);width:600px;max-height:88vh;border:1px solid #d2dce8;border-radius:15px;background:#fff;color:var(--ink);padding:22px;box-shadow:0 20px 65px #13243b45;overflow-y:auto}
+.guide-dialog::backdrop{background:#13243b88}
+.guide-top{display:flex;align-items:center;justify-content:space-between;gap:16px}.guide-top h2{margin:0;font-size:20px}
+.guide-list{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:18px 0}
+.guide-list>div{display:flex;align-items:center;gap:10px;min-height:54px}
+.guide-list strong{display:block;font-size:13px}.guide-list small{display:block;font-size:11px;color:#5e6b7e;line-height:1.5}
+.guide-sample{display:flex;flex:0 0 32px;width:32px;height:31px;border:1px solid #a5b2c0;align-items:center;justify-content:center;font-size:23px}
+.guide-sample.sleep{background:var(--sleep)}.guide-sample.rest{position:relative}.guide-sample.rest svg{width:100%;height:100%;position:absolute;inset:0}.guide-sample.rest path{stroke:#27313d;stroke-width:10;fill:none}
+.guide-sample.habit{background:var(--habit);border-bottom:3px solid #ad822e}
+.guide-sample.zebra{background:linear-gradient(180deg,white 0 49%,#f3f7fc 50% 100%)}
+@media(max-width:650px){.guide-list{grid-template-columns:1fr}.jump-month-label{margin-left:0}.sleep-table .event-cell{font-size:11px}}
+@media print{
+ .guide-dialog{display:none!important}
+ .sleep-table{width:100%!important}
+ .sleep-table col.col-date{width:14mm!important}
+ .sleep-table col.col-sleep{width:17mm!important}
+ .sleep-table col.col-event{width:42mm!important}
+ .sleep-table thead th{height:7.2mm!important;font-size:5.7pt!important}
+ .sleep-table thead .sleepiness-head{font-size:5.3pt!important}
+ .sleep-table .slot{height:4.95mm!important}
+ .sleep-table .extra{font-size:6pt!important;white-space:nowrap}
+ .sleep-table .event-cell{font-size:5.6pt!important;line-height:1.04!important;white-space:normal!important;overflow:hidden!important;padding:0 .7mm!important;overflow-wrap:anywhere;max-height:4.95mm!important}
+ .sleep-table .slot.rest{background:transparent!important}
+ .sleep-table .slot .print-glyph.rest-glyph{display:block!important}
+ .sleep-table tbody tr:nth-child(even) td:not(.slot.sleep):not(.date-cell){background-color:#f3f7fc!important}
+ .chart-print-footer{flex-wrap:wrap;margin-top:1mm!important;gap:1.5mm!important}
+ .chart-print-footer .legend{gap:3mm!important;font-size:5.9pt!important;margin:0!important}
+}
+
+/* v1.0.1: 体重の追加（未入力も表に常時表示） */
+:root{--weightcol:82px}
+.sleep-table{width:calc(var(--datecol) + 48 * var(--slot) + 2 * var(--sleepcol) + var(--weightcol) + var(--notecol))}
+.sleep-table col.col-weight{width:var(--weightcol)}
+.sleep-table .weight-cell{text-align:center;font-size:12px;font-variant-numeric:tabular-nums;font-weight:600;padding:0 2px;white-space:nowrap}
+.sleep-table thead .weight-head{font-size:10px;line-height:1.1}
+.sleep-table tbody tr:nth-child(even) td.weight-cell{background:#f3f7fc}
+#day-weight{font-size:16px}
+@media print{
+ .sleep-table col.col-date{width:14mm!important}
+ .sleep-table col.col-sleep{width:17mm!important}
+ .sleep-table col.col-weight{width:12mm!important}
+ .sleep-table col.col-event{width:38mm!important}
+ .sleep-table .weight-cell{font-size:5.6pt!important;padding:0 .4mm!important;white-space:nowrap!important}
+ .sleep-table thead .weight-head{font-size:5.3pt!important}
+ .sleep-table tbody tr:nth-child(even) td.weight-cell{background:#f3f7fc!important}
+}
