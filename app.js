@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.3 (2026-11-02) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.4 (2026-11-02) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -199,7 +199,7 @@ function renderModes(){
  $('#entry-help').textContent=single?'指定した時刻に記号を付けます。':selectedMode==='erase'?'選択した範囲の熟睡・休息・◎服薬・△就寝・▽起床・□食事を消去します。同じ時刻なら30分枠を消去します。':'開始から終了まで記録します。翌日にまたがる指定もできます。';
 }
 function renderSleepiness(el,key){const d=dayData(state.selected);$(el).innerHTML=['無','弱','強'].map(x=>`<button type="button" class="chip ${d[key]===x?'active':''}" data-value="${x}">${x}</button>`).join('');$(el).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const old=d[key];d[key]=b.dataset.value;action(b,async()=>{try{await persistDay(state.selected);renderSleepiness(el,key);renderDayPreview();renderChart()}catch(e){d[key]=old;throw e}})}))}
-function renderInput(){$('#entry-date').value=state.selected;const a=dayData(state.selected);renderSleepiness('#wake-sleepiness','wakeSleepiness');renderSleepiness('#day-sleepiness','daySleepiness');$('#day-note').value=a.note||'';$('#day-weight').value=validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1);
+function renderInput(){$('#entry-date').value=state.selected;updateDatePickerButtons();const a=dayData(state.selected);renderSleepiness('#wake-sleepiness','wakeSleepiness');renderSleepiness('#day-sleepiness','daySleepiness');$('#day-note').value=a.note||'';$('#day-weight').value=validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1);
  let meds=state.medicines.filter(m=>(!m.start||m.start<=state.selected)&&(!m.end||m.end>=state.selected));if(!meds.length)meds=state.medicines;
  $('#selected-medicine').innerHTML=meds.filter(x=>x.name).map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')+'<option value="other">その他／未設定</option>';renderModes();renderDayPreview()}
 function rangesForDay(a,kind){
@@ -294,7 +294,7 @@ async function renderAnalysis(){const days=getRange();if(currentUser?.emailVerif
  $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${x[0]}</small><strong>${x[1]}</strong><p>${x[2]}</p></div>`).join('');$('#analysis-title').textContent=analysisView==='daily'?`${state.selected} の記録`:analysisView==='weekly'?'直近7日間の睡眠記録':`${state.month.replace('-','年')}月の睡眠記録`;
  $('#analysis-bars').innerHTML=days.map(k=>{const a=state.days[k],v=(a?.slots||[]).filter(x=>x==='sleep').length*30;return `<div class="baritem"><div>${k.slice(5)}</div><div class="barbg"><div class="barvalue" style="width:${Math.min(100,v/1440*100)}%"></div></div><strong>${a?fmt(v):'未入力'}${a&&validWeight(a.weight)!==null?' / '+validWeight(a.weight).toFixed(1)+'kg':''}</strong></div>`}).join('')||'<span class="muted">まだ記録がありません</span>';
 }
-function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})));renderMedicineRows()}
+function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';updateDatePickerButtons();$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})));renderMedicineRows()}
 function syncMedicineInputs(){for(const row of $$('#medicine-rows .medicine-row')){const m=state.medicines.find(m=>m.id===row.dataset.id);if(m)row.querySelectorAll('input').forEach(i=>{m[i.dataset.key]=i.value})}}
 function renderMedicineRows(){const ms=state.medicines;$('#medicine-rows').innerHTML=ms.length?ms.map(m=>`<div class="medicine-row" data-id="${esc(m.id)}"><input aria-label="薬の名前" type="text" maxlength="80" data-key="name" value="${esc(m.name||'')}" placeholder="薬の名前"><input aria-label="服用開始日" type="date" data-key="start" value="${esc(m.start||'')}"><input aria-label="服用終了日" type="date" data-key="end" value="${esc(m.end||'')}"><button class="btn small danger" title="薬の行を削除" data-remove="${esc(m.id)}">×</button></div>`).join(''):'<span class="muted">まだ薬がありません。「＋ 薬を追加」から登録できます。</span>';
  $$('#medicine-rows button[data-remove]').forEach(b=>b.addEventListener('click',()=>{syncMedicineInputs();deletedMedicineIds.add(b.dataset.remove);state.medicines=state.medicines.filter(m=>m.id!==b.dataset.remove);renderMedicineRows()}))}
@@ -423,4 +423,76 @@ $('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
 $$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisView=b.dataset.view;await renderAnalysis()})));
 $('#save-settings').addEventListener('click',saveSettings);$('#add-medicine').addEventListener('click',()=>{syncMedicineInputs();state.medicines.push({id:makeId(),name:'',start:state.selected,end:''});renderMedicineRows()});
+// iPhone Safariで幅が崩れるネイティブ日付・年月入力を、同じ幅のカレンダー選択に置換。
+// Firestoreへの保存形式（YYYY-MM-DD / YYYY-MM）は従来どおり維持。
+let pickerKind='day',pickerYear=2026,pickerMonth=1,pickerDay=1;
+const pad2=n=>String(n).padStart(2,'0');
+function updateDatePickerButtons(){
+ const day=$('#entry-date').value||state.selected||'';
+ const first=$('#first-month').value||'';
+ $('#entry-date-text').textContent=/^\d{4}-\d{2}-\d{2}$/.test(day)?day.replaceAll('-','/'):'日付を選ぶ';
+ $('#first-month-text').textContent=/^\d{4}-\d{2}$/.test(first)?first.replace('-','年')+'月':'指定しない';
+}
+function clampPickerDay(){pickerDay=Math.max(1,Math.min(pickerDay,new Date(pickerYear,pickerMonth,0).getDate()))}
+function pickerStep(n){
+ const d=new Date(pickerYear,pickerMonth-1+n,1);
+ pickerYear=d.getFullYear();pickerMonth=d.getMonth()+1;
+ if(pickerYear<1900){pickerYear=1900;pickerMonth=1}
+ if(pickerYear>2100){pickerYear=2100;pickerMonth=12}
+ clampPickerDay();renderDatePicker();
+}
+function renderDatePicker(){
+ $('#picker-year').value=String(pickerYear);
+ $('#picker-month').value=String(pickerMonth);
+ const monthOnly=pickerKind==='month';
+ $('#picker-day-area').hidden=monthOnly;
+ $('#picker-today').hidden=monthOnly;
+ $('#picker-clear').hidden=!monthOnly;
+ $('#picker-confirm').textContent=monthOnly?'この月を選ぶ':'この日を選ぶ';
+ if(monthOnly)return;
+ const weekday=new Date(pickerYear,pickerMonth-1,1).getDay();
+ const last=new Date(pickerYear,pickerMonth,0).getDate();
+ const today=iso(new Date());
+ let content=Array.from({length:weekday},()=>'<span aria-hidden="true"></span>').join('');
+ for(let day=1;day<=last;day++){
+  const value=dateString(pickerYear,pickerMonth,day),selected=day===pickerDay;
+  content+=`<button type="button" data-day="${day}" aria-label="${pickerYear}年${pickerMonth}月${day}日" aria-pressed="${selected}" class="${selected?'selected':''} ${value===today?'today':''}">${day}</button>`;
+ }
+ $('#picker-days').innerHTML=content;
+}
+function openDatePicker(kind){
+ pickerKind=kind;
+ let value=kind==='day'?$('#entry-date').value:$('#first-month').value;
+ if(!/^\d{4}-\d{2}/.test(value))value=iso(new Date());
+ const chunks=value.split('-').map(Number);
+ pickerYear=Math.max(1900,Math.min(2100,chunks[0]));
+ pickerMonth=Math.max(1,Math.min(12,chunks[1]||1));
+ pickerDay=chunks[2]||1;
+ clampPickerDay();
+ $('#date-picker-title').textContent=kind==='day'?'記録する日付':'最初に表示する月';
+ renderDatePicker();$('#date-picker-dialog').showModal();
+}
+function applyDatePicker(clear=false){
+ const field=pickerKind==='day'?$('#entry-date'):$('#first-month');
+ field.value=clear?'':(pickerKind==='day'?dateString(pickerYear,pickerMonth,pickerDay):`${pickerYear}-${pad2(pickerMonth)}`);
+ $('#date-picker-dialog').close();
+ updateDatePickerButtons();
+ // 既存のFirestoreデータ再取得処理に連携。設定側は「設定を保存」で確定。
+ if(pickerKind==='day')field.dispatchEvent(new Event('change',{bubbles:true}));
+}
+$('#entry-date-picker').addEventListener('click',()=>openDatePicker('day'));
+$('#first-month-picker').addEventListener('click',()=>openDatePicker('month'));
+$('#date-picker-close').addEventListener('click',()=>$('#date-picker-dialog').close());
+$('#picker-year').innerHTML=Array.from({length:201},(_,i)=>`<option value="${i+1900}">${i+1900}年</option>`).join('');
+$('#picker-month').innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}月</option>`).join('');
+$('#picker-year').addEventListener('change',e=>{pickerYear=Number(e.target.value);clampPickerDay();renderDatePicker()});
+$('#picker-month').addEventListener('change',e=>{pickerMonth=Number(e.target.value);clampPickerDay();renderDatePicker()});
+$('#picker-prev').addEventListener('click',()=>pickerStep(-1));
+$('#picker-next').addEventListener('click',()=>pickerStep(1));
+$('#picker-days').addEventListener('click',e=>{const b=e.target.closest('button[data-day]');if(!b)return;pickerDay=Number(b.dataset.day);renderDatePicker()});
+$('#picker-today').addEventListener('click',()=>{const now=new Date();pickerYear=now.getFullYear();pickerMonth=now.getMonth()+1;pickerDay=now.getDate();renderDatePicker()});
+$('#picker-clear').addEventListener('click',()=>{if(pickerKind==='month')applyDatePicker(true)});
+$('#picker-confirm').addEventListener('click',()=>applyDatePicker());
+$('#date-picker-dialog').addEventListener('click',e=>{if(e.target.id==='date-picker-dialog')e.target.close()});
+
 // 表を初期状態で表示するのはログイン＆確認済み後のみ。デモデータは入れない。

@@ -200,3 +200,33 @@
  .twocol>.panel, .settings-grid>.panel{width:100%;max-width:100%;min-width:0}
  .field input[type="date"],.field input[type="month"]{font-size:16px!important}
 }
+
+/* v1.0.4: iPhone Safariのネイティブdate/month入力幅に依存しない全幅選択ボタン。 */
+.date-picker-trigger{
+ display:flex;justify-content:space-between;align-items:center;gap:12px;
+ width:100%;min-width:0;max-width:100%;box-sizing:border-box;
+ min-height:44px;padding:10px 11px;
+ background:#fff;color:var(--ink);border:1px solid #d5dee9;
+ border-radius:7px;text-align:left;font:inherit;font-size:16px;overflow:hidden;
+ -webkit-appearance:none;appearance:none;
+}
+.date-picker-trigger .picker-button-value{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker-button-symbol{flex-shrink:0;font-size:18px;color:#65748b}
+.date-picker-dialog{width:min(94vw,420px);max-width:420px;max-height:88dvh;padding:20px;border:1px solid #d2dce8;border-radius:14px;background:#fff;color:var(--ink);box-shadow:0 16px 55px #14243c50;overflow:auto;box-sizing:border-box}
+.date-picker-dialog::backdrop{background:#13243b90}
+.date-picker-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.date-picker-heading h2{font-size:17px;margin:0}
+.picker-month-controls{display:grid;grid-template-columns:40px minmax(0,1fr) minmax(0,0.8fr) 40px;gap:6px;align-items:center}
+.picker-month-controls select{width:100%;min-width:0;max-width:100%;padding:10px 4px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--ink);font-size:16px}
+.picker-month-controls .btn{height:43px;padding:0}
+.picker-weekdays,.picker-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
+.picker-weekdays{margin:14px 0 5px;font-size:12px;color:#68768b;font-weight:700}
+.picker-days{margin-bottom:15px}
+.picker-days button,.picker-days span{display:flex;align-items:center;justify-content:center;min-height:40px;min-width:0;border-radius:7px;font-size:14px}
+.picker-days button{border:1px solid transparent;background:#f7f9fc;color:var(--ink);cursor:pointer}
+.picker-days button.selected{background:var(--accent);color:#fff;font-weight:800}
+.picker-days button.today:not(.selected){outline:1px solid var(--accent)}
+.picker-bottom{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:15px}
+#picker-clear{margin-right:auto}
+@media(max-width:370px){.date-picker-dialog{padding:12px}.picker-month-controls{grid-template-columns:34px minmax(0,1fr) minmax(0,0.8fr) 34px}}
+@media print{.date-picker-dialog{display:none!important}}
