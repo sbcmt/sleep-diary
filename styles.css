@@ -296,3 +296,45 @@
 @media print{#analysis-graphs{display:none!important}}
 
 .auth-policy-link{font-size:13px;text-align:center;margin:16px 0 0}.auth-policy-link a,.disclosure a{color:#326b50;text-underline-offset:3px}
+
+/* Ver.1.0.8: 月間表はスクロールしても日付欄の背面が透けない */
+@media screen {
+ .sleep-table tbody tr:nth-child(odd) td:not(.slot.sleep):not(.slot.rest){background-color:#ffffff!important}
+ .sleep-table tbody tr:nth-child(even) td:not(.slot.sleep):not(.slot.rest){background-color:#f3f7fc!important}
+ .sleep-table tbody tr:nth-child(odd) td.slot.rest{background:#fff!important}
+ .sleep-table tbody tr:nth-child(even) td.slot.rest{background:#f3f7fc!important}
+ .sleep-table tbody tr td.slot.sleep{background:var(--sleep)!important}
+ .sleep-table tbody tr td.date-cell{position:sticky!important;left:0!important;z-index:12!important;isolation:isolate;background-clip:padding-box;box-shadow:2px 0 0 #c6d0dc}
+ .sleep-table thead th.date-cell{position:sticky!important;left:0!important;z-index:20!important;background:#eef2f7!important}
+ .sleep-table tbody tr td.slot,.sleep-table tbody tr td.extra,.sleep-table tbody tr td.weight-cell,.sleep-table tbody tr td.event-cell{position:relative;z-index:0}
+}
+.sleep-table .date-cell.sunday{color:#bb3448!important}
+.sleep-table .date-cell.saturday{color:#315b9c!important}
+
+/* お薬・サプリ管理 */
+.med-management-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+.med-management-grid>.panel{min-width:0;margin:0}
+.med-form-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.med-form-two>.field{min-width:0}
+.med-form-two input,.med-form-two select,.med-management-grid input,.med-management-grid select,.med-management-grid textarea{min-width:0;max-width:100%;font-size:16px}
+.med-timing-group{border:1px solid var(--border);border-radius:9px;margin:0 0 10px;padding:10px}
+.med-timing-group legend{font-size:12px;font-weight:750;color:var(--ink);padding:0 5px}
+.med-timing-group>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.med-timing-choice{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:7px;padding:8px 9px;min-width:0;background:#fff;cursor:pointer}
+.med-timing-choice input{width:17px;height:17px;flex:0 0 auto;accent-color:var(--accent)}
+.med-timing-choice span{font-size:13px;white-space:nowrap}
+.med-list-tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.med-list-tabs .active{border-color:var(--accent);background:var(--soft);color:var(--accent)}
+.med-date-group{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;background:#fff}
+.med-date-group h3{font-size:14px;background:var(--soft);margin:0;padding:12px 14px;color:var(--ink)}
+.med-record{padding:12px 14px;border-top:1px solid var(--border)}
+.med-info{display:grid;gap:3px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.med-info strong{font-size:15px}
+.med-extra-note{white-space:pre-wrap;color:#5b6c81}
+.med-record-buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.med-empty,.med-assist{font-size:13px;color:#66758b}
+.analysis-month-row{display:flex;align-items:center;gap:7px;max-width:100%;min-width:0}
+.analysis-month-row input{min-width:0;width:160px;max-width:100%;height:38px;padding:6px 9px;background:white;border:1px solid var(--border);border-radius:8px;color:var(--ink);font-size:16px}
+@media(max-width:850px){.med-management-grid{grid-template-columns:minmax(0,1fr)}.med-form-two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media(max-width:370px){.med-form-two{grid-template-columns:minmax(0,1fr)}.med-timing-group>div{grid-template-columns:minmax(0,1fr)}}
+@media print{.sleep-table tbody tr td.date-cell{color:inherit}.sleep-table tbody tr td.date-cell.sunday{color:#bb3448!important}.sleep-table tbody tr td.date-cell.saturday{color:#315b9c!important}}
