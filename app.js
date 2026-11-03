@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.8 (2026-11-03) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.8 (2026-11-02) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -48,22 +48,49 @@ function time(i){return `${String(Math.floor(i/2)).padStart(2,'0')}:${i%2?'30':'
 function idx(t){let a=(t||'00:00').split(':').map(Number);return a[0]*2+a[1]/30}
 function monthParts(month){return month.split('-').map(Number)}
 function weekday(y,m,d){return ['日','月','火','水','木','金','土'][new Date(y,m-1,d).getDay()]}
-// 内閣府「国民の祝日」公表日（2026年・2027年）。翌年以降の確定日は更新する。
-const japanHolidays=new Set([
- '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
- '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22','2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23'
-]);
-function dayColorClass(y,m,d){return japanHolidays.has(dateString(y,m,d))||weekday(y,m,d)==='日'?'sunday':weekday(y,m,d)==='土'?'saturday':''}
 function nextDay(key){const d=new Date(`${key}T12:00:00`);d.setDate(d.getDate()+1);return iso(d)}
 function freshDay(){return {slots:Array(48).fill(''),markers:[],wakeSleepiness:'',daySleepiness:'',note:'',weight:null}}
-// 既存の記録の錠数を勝手に1錠とみなさず、未入力のまま保つ。
-function validTablets(value){const n=Number(value);return value!=null&&value!==''&&[0.5,1,2,3,4,5,6,7,8].includes(n)?n:null}
-function tabletsLabel(value,unit='錠'){const n=validTablets(value);return n===null?'服用量未登録':`${n===0.5?'半':n}${unit||'錠'}`}
-function medicationName(marker){return state.medicines.find(m=>m.id===marker.medId)?.name||'服用薬未設定'}
-function medicationDetail(marker){const med=state.medicines.find(m=>m.id===marker.medId);return `${medicationName(marker)}・${tabletsLabel(marker.tablets,marker.unit||med?.unit||'錠')}`}
+// 内閣府公表の2026・2027年の祝日・休日。2028年以降は将来の変更により更新が必要。
+const publishedHolidays={
+ 2026:'01-01 01-12 02-11 02-23 03-20 04-29 05-03 05-04 05-05 05-06 07-20 08-11 09-21 09-22 09-23 10-12 11-03 11-23',
+ 2027:'01-01 01-11 02-11 02-23 03-21 03-22 04-29 05-03 05-04 05-05 07-19 08-11 09-20 09-23 10-11 11-03 11-23'
+};
+const holidayCache=new Map();
+function nthMonday(y,m,n){const dow=new Date(y,m-1,1).getDay();return 1+(8-dow)%7+7*(n-1)}
+function approximateEquinox(y,spring){return Math.floor((spring?20.8431:23.2488)+0.242194*(y-1980)-Math.floor((y-1980)/4))}
+function japaneseHolidays(y){
+ if(holidayCache.has(y))return holidayCache.get(y);
+ let dates=new Set();const add=(m,d)=>dates.add(dateString(y,m,d));
+ if(publishedHolidays[y])publishedHolidays[y].split(' ').forEach(x=>dates.add(`${y}-${x}`));
+ else if(y>=2000&&y<=2099){
+  add(1,1);add(1,nthMonday(y,1,2));add(2,11);
+  if(y>=2020)add(2,23);else if(y<=2018)add(12,23);
+  add(3,approximateEquinox(y,true));add(4,29);add(5,3);add(5,4);add(5,5);
+  add(7,nthMonday(y,7,3));if(y>=2016)add(8,11);add(9,nthMonday(y,9,3));add(9,approximateEquinox(y,false));
+  add(10,nthMonday(y,10,2));add(11,3);add(11,23);
+  // 東京五輪の特別日程（2020・2021年）
+  if(y===2020){['07-20','10-12','08-11'].forEach(x=>dates.delete(`${y}-${x}`));['07-23','07-24','08-10'].forEach(x=>dates.add(`${y}-${x}`));}
+  if(y===2021){['07-19','10-11','08-11'].forEach(x=>dates.delete(`${y}-${x}`));['07-22','07-23','08-08'].forEach(x=>dates.add(`${y}-${x}`));}
+  // 国民の休日：祝日に挟まれた平日（国民の祝日ではない休日）
+  for(let i=2;i<=365;i++){let dt=new Date(y,0,i);if(dt.getFullYear()!==y)break;const k=iso(dt);if(dates.has(k))continue;
+   const before=new Date(dt);before.setDate(before.getDate()-1);const after=new Date(dt);after.setDate(after.getDate()+1);
+   if(dates.has(iso(before))&&dates.has(iso(after))&&dt.getDay()!==0)dates.add(k);
+  }
+  // 振替休日。前の祝日と重ならない最初の日へ繰り下げる。
+  const originals=[...dates].sort();for(const key of originals){const dt=new Date(`${key}T12:00:00`);if(dt.getDay()!==0)continue;
+    dt.setDate(dt.getDate()+1);while(dates.has(iso(dt)))dt.setDate(dt.getDate()+1);if(dt.getFullYear()===y)dates.add(iso(dt));
+  }
+ }
+ holidayCache.set(y,dates);return dates;
+}
+function isJapaneseHoliday(key){return japaneseHolidays(Number(key.slice(0,4))).has(key)}
+
+// 服薬時刻（◎）と薬・サプリの登録情報は独立して保存します。
+const doseValues=new Set([0.5,1,2,3,4,5,6,7,8]);
+const medicineTimings=['毎食前','朝食前','昼食前','夕食前','毎食直前','朝食直前','昼食直前','夕食直前','毎食後','朝食後','昼食後','夕食後','毎食直後','朝食直後','昼食直後','夕食直後','毎食間','朝昼の間','昼夕の間','起床時','就寝前','頓服（必要なとき）','時刻指定','一定時間ごと','その他'];
 
 const state={month:iso(new Date()).slice(0,7),selected:iso(new Date()),settings:blankSettings(),days:{},medicines:[],loadedMonths:new Set()};
-let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),medFilter='current',currentUser=null, sessionEpoch=0, deletedMedicineIds=new Set(), busy=false, verifyTimer=null, checkingVerification=false;
+let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),currentUser=null, sessionEpoch=0, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>el.classList.remove('show'),3600)}
 function notice(msg){$('#auth-notice').textContent=msg;$('#auth-notice').classList.add('show')}
@@ -118,11 +145,10 @@ async function loadInitial(){
  if(uid!==currentUser?.uid)return;
  state.settings={...blankSettings(),...(settingsSnap.exists()?settingsSnap.data():{})};
  if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.settings.firstMonth||''))state.month=state.settings.firstMonth;
- analysisMonth=state.month;
- state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));deletedMedicineIds.clear();
+ state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
- await loadMonth(state.month);
- applyTheme();renderChart();renderInput();renderSettings();renderMedications();renderAnalysis();
+ await loadMonth(state.month);analysisMonth=state.month;
+ applyTheme();renderChart();renderInput();renderSettings();renderAnalysis();
 }
 async function persistDay(key){assertSession();const item=normalDay(key);await setDoc(dayRef(key),{...item,updatedAt:serverTimestamp()});}
 async function persistSettings(){assertSession();const {name,habitBed,habitWake,theme,firstMonth}=state.settings;await setDoc(userDoc(),{name,habitBed,habitWake,theme,firstMonth,updatedAt:serverTimestamp()},{merge:true});}
@@ -177,11 +203,11 @@ function renderChart(){
  $('#print-month').textContent=`${y}年${m}月`;
  $('#print-range').textContent=`${y}年${m}月1日〜${m}月${n}日`;
  $('#print-person').textContent=state.settings.name?`氏名：${state.settings.name}`:'氏名：　　　　　　　　　';
- const head='<colgroup><col class="col-date">'+Array.from({length:48},()=>'<col class="col-slot">').join('')+'<col class="col-sleep"><col class="col-sleep"><col class="col-weight"><col class="col-event"></colgroup><thead><tr><th class="date-cell">日付・曜日</th>'+Array.from({length:24},(_,h)=>{
+  const head='<colgroup><col class="col-date">'+Array.from({length:48},()=>'<col class="col-slot">').join('')+'<col class="col-sleep"><col class="col-sleep"><col class="col-weight"><col class="col-event"></colgroup><thead><tr><th class="date-cell">日付・曜日</th>'+Array.from({length:24},(_,h)=>{
  const rects=[isHabit(h*2),isHabit(h*2+1)].map((on,j)=>on?`<rect class="habit-shade" x="${j*50}" y="0" width="50" height="100"/><line class="habit-underbar" x1="${j*50}" y1="96" x2="${(j+1)*50}" y2="96"/>`:'').join('');
  return `<th class="h-hour" colspan="2">${rects?`<svg class="hour-accent" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${rects}</svg>`:''}<span class="hour-number">${h}</span></th>`}).join('')+'<th class="sleepiness-head">目覚めの眠気</th><th class="sleepiness-head">日中の眠気</th><th class="weight-head">体重<br>(kg)</th><th class="event-head">出来事</th></tr></thead>';
  let body='';for(let d=1;d<=n;d++){
-  const date=dateString(y,m,d),a=state.days[date]||freshDay(),wd=weekday(y,m,d),cl=dayColorClass(y,m,d);
+  const date=dateString(y,m,d),a=state.days[date]||freshDay(),wd=weekday(y,m,d),cl=isJapaneseHoliday(date)||wd==='日'?'sunday':wd==='土'?'saturday':'';
   body+=`<tr class="selectday" data-date="${date}"><td class="date-cell ${cl}">${d}（${wd}）</td>`;
   for(let i=0;i<48;i++){
    const kind=['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:'',matches=(a.markers||[]).filter(x=>x.slot===i),mark=matches.map(x=>markerSVG(x.type)).join(''),details=matches.map(x=>x.type==='med'?'◎ 服薬':{bed:'▽ 就寝',wake:'△ 起床',meal:'□ 食事'}[x.type]).filter(Boolean).join('、');
@@ -196,19 +222,12 @@ async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast
 async function monthShift(n){const [y,m]=monthParts(state.month),d=new Date(y,m-1+n,1);await jumpMonth(dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7))}
 async function show(tab){if(tab==='report'||tab==='analysis')await loadMonth(state.month);if(tab==='input')await loadMonth(state.selected.slice(0,7));
  $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$$('.screen').forEach(s=>s.classList.toggle('active',s.id===`screen-${tab}`));
- if(tab==='report')renderChart();if(tab==='input')renderInput();if(tab==='settings')renderSettings();if(tab==='medications')renderMedications();if(tab==='analysis')await renderAnalysis();window.scrollTo({top:0,behavior:'instant'});
+ if(tab==='report')renderChart();if(tab==='input')renderInput();if(tab==='settings')renderSettings();if(tab==='medicines'){renderMedicineList();resetMedicineForm()}if(tab==='analysis')await renderAnalysis();window.scrollTo({top:0,behavior:'instant'});
 }
 function fillTimes(){const options=Array.from({length:49},(_,i)=>`<option value="${time(i)}">${time(i)}</option>`).join('');$$('#entry-start,#entry-end,#habit-bed,#habit-wake').forEach(el=>el.innerHTML=options);$('#entry-start').value='23:00';$('#entry-end').value='23:30'}
-function setDoseFromMedicine(){
- const med=state.medicines.find(m=>m.id===$('#selected-medicine').value);
- $('#tablet-unit-label').textContent=med?.unit||'錠';
- const dose=validTablets(med?.dose);
- $('#tablet-count').value=String(dose??1);
-}
 function renderModes(){
  $$('.mode').forEach(b=>b.classList.toggle('active',b.dataset.mode===selectedMode));
  const single=['med','bed','wake','meal'].includes(selectedMode);
- $('#medicine-selector').classList.toggle('site-hidden',selectedMode!=='med');
  $('#entry-end-field').classList.toggle('site-hidden',single);
  $('#entry-time-row').classList.toggle('single-time',single);
  $('#entry-start-label').textContent=single?'時刻':'開始時刻';
@@ -217,10 +236,7 @@ function renderModes(){
 }
 function renderSleepiness(el,key){const d=dayData(state.selected);$(el).innerHTML=['無','弱','強'].map(x=>`<button type="button" class="chip ${d[key]===x?'active':''}" data-value="${x}">${x}</button>`).join('');$(el).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const old=d[key];d[key]=b.dataset.value;action(b,async()=>{try{await persistDay(state.selected);renderSleepiness(el,key);renderDayPreview();renderChart()}catch(e){d[key]=old;throw e}})}))}
 function renderInput(){$('#entry-date').value=state.selected;updateDatePickerButtons();const a=dayData(state.selected);renderSleepiness('#wake-sleepiness','wakeSleepiness');renderSleepiness('#day-sleepiness','daySleepiness');$('#day-note').value=a.note||'';$('#day-weight').value=validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1);
- let meds=state.medicines.filter(m=>m.name&&(!m.start||m.start<=state.selected)&&(!m.end||m.end>=state.selected)&&!m.supersededAt);
- const chosen=$('#selected-medicine').value;$('#selected-medicine').innerHTML=meds.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')+'<option value="other">その他／未設定</option>';
- if(meds.some(m=>m.id===chosen))$('#selected-medicine').value=chosen;
- setDoseFromMedicine();renderModes();renderDayPreview()}
+ renderModes();renderDayPreview()}
 function rangesForDay(a,kind){
  const result=[];let start=-1;
  for(let i=0;i<=48;i++){
@@ -235,11 +251,11 @@ function renderDayPreview(){
  $('#day-duration').textContent=minutes(a,'sleep');$('#day-rest').textContent=minutes(a,'rest');
  $('#quicktimeline').innerHTML=Array.from({length:48},(_,i)=>{
   const kind=['sleep','rest'].includes(a.slots[i])?a.slots[i]:'';
-  const slotMarkers=(a.markers||[]).filter(x=>x.slot===i),symbols=slotMarkers.map(x=>markerSVG(x.type)).join(''),detail=slotMarkers.filter(x=>x.type==='med').map(medicationDetail).join('、');
-  return `<div class="quick-slot ${kind}" title="${time(i)} ${kind==='sleep'?'熟睡':kind==='rest'?'休息':''}${detail?' 服薬：'+esc(detail):''}">${printPattern(kind)}<span class="markers">${symbols}</span></div>`
+  const slotMarkers=(a.markers||[]).filter(x=>x.slot===i),symbols=slotMarkers.map(x=>markerSVG(x.type)).join('');
+  return `<div class="quick-slot ${kind}" title="${time(i)} ${kind==='sleep'?'熟睡':kind==='rest'?'休息':''}">${printPattern(kind)}<span class="markers">${symbols}</span></div>`
  }).join('');
  const sorted=(a.markers||[]).map((v,i)=>({...v,originalIndex:i})).sort((x,y)=>x.slot-y.slot);
- $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'▽ 就寝',wake:'△ 起床',meal:'□ 食事'}[x.type]}${x.type==='med'?'（'+esc(medicationDetail(x))+'）':''} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
+ $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'▽ 就寝',wake:'△ 起床',meal:'□ 食事'}[x.type]} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
  const summary=[];
  const sleeps=rangesForDay(a,'sleep'), rests=rangesForDay(a,'rest');
  if(sleeps.length)summary.push(['熟睡',sleeps.join('、')]);
@@ -273,15 +289,9 @@ async function applyEntry(){await action($('#add-entry'),async()=>{
  const a=dayData(date);
  if(symbols){
   const marker={slot:start,type:selectedMode};
-  // 同じ種類・時刻の重複登録は避ける。別の記号は同じ時刻にも登録可能。
-  if(selectedMode==='med'){
-   const previous=a.markers.find(x=>x.slot===start&&x.type==='med'&&x.medId===$('#selected-medicine').value);
-   if(previous){previous.tablets=validTablets($('#tablet-count').value);previous.unit=state.medicines.find(m=>m.id===previous.medId)?.unit||'錠';if(previous.tablets===null){toast('錠数を選択してください');return}
-    // 錠数修正は新しい行を増やさず、保存処理へ進む。
-    marker.skipPush=true;}
-  }else if(a.markers.some(x=>x.slot===start&&x.type===selectedMode)){toast('この時刻には既に同じ記号があります');return}
-  if(selectedMode==='med'){marker.medId=$('#selected-medicine').value;marker.unit=state.medicines.find(m=>m.id===marker.medId)?.unit||'錠';marker.tablets=validTablets($('#tablet-count').value);if(marker.tablets===null){toast('錠数を選択してください');return}}
-  if(!marker.skipPush)a.markers.push(marker);
+  // 服薬記録は時刻のみ。既存の薬の登録情報や錠数に依存させない。
+  if(a.markers.some(x=>x.slot===start&&x.type===selectedMode)){toast('この時刻には既に同じ記号があります');return}
+  a.markers.push(marker);
  }else if(erasing){
   eraseTimedEntries(a,start,end>start?end:48);
   if(end<start)eraseTimedEntries(dayData(next),0,end);
@@ -309,20 +319,27 @@ async function saveDay(){await action($('#save-day'),async()=>{
  catch(e){state.days[state.selected]=before;renderInput();throw e}
 });}
 function sumFor(days){let s=0,r=0,recorded=0,sleepRecorded=0,weights=[],wake={'無':0,'弱':0,'強':0},day={'無':0,'弱':0,'強':0};for(const key of days){const a=state.days[key];if(!a)continue;const sn=(a.slots||[]).filter(v=>v==='sleep').length*30,rn=(a.slots||[]).filter(v=>v==='rest').length*30;if(sn||rn)sleepRecorded++;if(validWeight(a.weight)!==null)weights.push({date:key,value:validWeight(a.weight)});if(sn||rn||(a.markers||[]).length||a.note||a.wakeSleepiness||a.daySleepiness||validWeight(a.weight)!==null){recorded++;s+=sn;r+=rn;if(a.wakeSleepiness)wake[a.wakeSleepiness]=(wake[a.wakeSleepiness]||0)+1;if(a.daySleepiness)day[a.daySleepiness]=(day[a.daySleepiness]||0)+1}}return {s,r,recorded,sleepRecorded,wake,day,weights}}
-function daysInMonth(month){const [y,m]=monthParts(month),n=new Date(y,m,0).getDate();return Array.from({length:n},(_,i)=>dateString(y,m,i+1))}
-function monthsUpTo(month,n){const [y,m]=monthParts(month);return Array.from({length:n},(_,i)=>{const d=new Date(y,m-n+i,1);return dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7)})}
-// 日次：選択月の日別、週次：選択月内の週平均、月次：選択月を含む過去6か月の月平均。
-function graphData(days){return days.map(key=>{const day=state.days[key],hasSleep=Boolean(day&&(day.slots||[]).some(v=>v==='sleep'||v==='rest'));return {date:key,sleepHours:hasSleep?(day.slots||[]).filter(v=>v==='sleep').length*0.5:null,weight:day?validWeight(day.weight):null}})}
-function groupedGraphData(days,view){
- const data=graphData(days);if(view==='daily')return data;
- const groups=new Map();data.forEach(item=>{let key,label;if(view==='weekly'){
-  const d=new Date(item.date+'T12:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);key=iso(d);label=`${d.getMonth()+1}/${d.getDate()}週`;
- }else{key=item.date.slice(0,7);label=key.replace('-','/');}
- if(!groups.has(key))groups.set(key,{date:key,label,items:[]});groups.get(key).items.push(item);
- });
- return [...groups.values()].map(g=>{const sl=g.items.filter(i=>i.sleepHours!==null),wt=g.items.filter(i=>i.weight!==null);return {date:g.date,label:g.label,sleepHours:sl.length?sl.reduce((a,i)=>a+i.sleepHours,0)/sl.length:null,weight:wt.length?wt.reduce((a,i)=>a+i.weight,0)/wt.length:null}});
+function getRange(){const [y,m]=monthParts(analysisMonth);const out=[];
+ if(analysisView==='monthly'){for(let month=1;month<=12;month++){const n=new Date(y,month,0).getDate();for(let d=1;d<=n;d++)out.push(dateString(y,month,d))}}
+ else{const n=new Date(y,m,0).getDate();for(let d=1;d<=n;d++)out.push(dateString(y,m,d))}
+ return out;
 }
-function chartXLabel(key,period){return period==='monthly'?key.slice(0,7).replace('-','/'):key.slice(5).replace('-','/');}
+// 表示対象は「両方」「睡眠のみ」「体重のみ」。異なる単位のグラフを重ねない。
+// 記録がない日は0や推測値で補完せず、グラフ上も欠測として表示。
+function graphData(days){
+ const entries=days.map(key=>{const day=state.days[key];return {date:key,sleepHours:day&&(day.slots||[]).some(slot=>slot==='sleep'||slot==='rest')?(day.slots||[]).filter(v=>v==='sleep').length*0.5:null,weight:day?validWeight(day.weight):null}});
+ if(analysisView==='daily')return entries;
+ const byPeriod=new Map();
+ for(const item of entries){
+  let period;
+  if(analysisView==='monthly')period=item.date.slice(0,7);
+  else {const dt=new Date(item.date+'T12:00:00');const day=(dt.getDay()+6)%7;dt.setDate(dt.getDate()-day);period=iso(dt)}
+  if(!byPeriod.has(period))byPeriod.set(period,{date:period,sleepHours:null,weight:null,weights:[],label:analysisView==='monthly'?period.slice(5)+'月':period.slice(5).replace('-','/')+'週'});
+  const a=byPeriod.get(period);if(item.sleepHours!==null)a.sleepHours=(a.sleepHours??0)+item.sleepHours;if(item.weight!==null)a.weights.push(item.weight);
+ }
+ return [...byPeriod.values()].map(a=>({...a,weight:a.weights.length?a.weights.reduce((x,y)=>x+y,0)/a.weights.length:null}));
+}
+function chartXLabel(key,period){return period==='monthly'?key.slice(5)+'月':key.slice(5).replace('-','/');}
 function chartNumber(n){return Number.isInteger(n)?String(n):n.toFixed(1)}
 function graphEmpty(label){return `<div class="graph-empty" role="status">${esc(label)}の記録はありません</div>`}
 function svgPlot(data,type){
@@ -344,7 +361,7 @@ function svgPlot(data,type){
   return `<line x1="${L}" y1="${yy.toFixed(2)}" x2="${W-R}" y2="${yy.toFixed(2)}" class="svg-grid"/><text x="${L-9}" y="${(yy+4).toFixed(2)}" text-anchor="end" class="svg-axis">${chartNumber(value)}</text>`
  }).join('');
  const step=data.length>18?Math.ceil(data.length/7):data.length>8?2:1;
- const ticks=data.map((d,i)=>i%step===0||i===data.length-1?`<text x="${x(i).toFixed(2)}" y="${H-B+20}" text-anchor="middle" class="svg-axis">${esc(d.label||chartXLabel(d.date,analysisView))}</text>`:'').join('');
+ const ticks=data.map((d,i)=>i%step===0||i===data.length-1?`<text x="${x(i).toFixed(2)}" y="${H-B+20}" text-anchor="middle" class="svg-axis">${esc(chartXLabel(d.date,analysisView))}</text>`:'').join('');
  let drawing='';
  if(!weightMode){
   const barW=Math.max(5,Math.min(23,plotW/data.length*0.65));
@@ -363,110 +380,117 @@ function svgPlot(data,type){
  return `<svg class="analysis-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${weightMode?'体重（kg）':'睡眠時間（時間）'}の日付別${weightMode?'折れ線':'棒'}グラフ。記録のない日は空白。"><text x="${L}" y="13" class="svg-unit">${weightMode?'体重（kg）':'睡眠時間（時間）'}</text>${grid}<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" class="svg-axis-line"/>${ticks}${drawing}<text x="${W-R}" y="${H-6}" text-anchor="end" class="svg-unit">日付</text></svg>`;
 }
 async function renderAnalysis(){
+ const days=getRange();
+ if(currentUser?.emailVerified){const months=[...new Set(days.map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
  $('#analysis-month').value=analysisMonth;
- const months=analysisView==='monthly'?monthsUpTo(analysisMonth,6):[analysisMonth];
- const days=months.flatMap(daysInMonth);
- if(currentUser?.emailVerified)await Promise.all(months.map(loadMonth));
  $$('#analysis-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===analysisView));
  $$('#analysis-targets button').forEach(b=>{const active=b.dataset.target===analysisTarget;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});
  const s=sumFor(days),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
  const weightAvg=s.weights.length?(s.weights.reduce((sum,x)=>sum+x.value,0)/s.weights.length).toFixed(1)+' kg':'—';
  const latestWeight=s.weights.at(-1);
- const sleepStats=[['記録した睡眠 合計',fmt(s.s),'入力した熟睡時間'],['休息 合計',fmt(s.r),'起きて布団の中にいた時間'],['記録のある日',`${s.recorded}日`,'対象期間内の登録'],['記録日の平均睡眠',s.sleepRecorded?fmt(Math.round(s.s/s.sleepRecorded/30)*30):'—','睡眠・休息の入力がある日で計算']];
+ const sleepStats=[['記録した睡眠 合計',fmt(s.s),'自分で「熟睡」とした時間'],['休息 合計',fmt(s.r),'起きて布団の中にいた時間'],['記録のある日',`${s.recorded}日`,'対象期間内の登録'],['記録日の平均睡眠',s.sleepRecorded?fmt(Math.round(s.s/s.sleepRecorded/30)*30):'—','睡眠・休息の入力がある日で計算']];
  const weightStats=[['体重 平均',weightAvg,`体重入力のある${s.weights.length}日で計算`],['期間内の直近体重',latestWeight?latestWeight.value.toFixed(1)+' kg':'—',latestWeight?latestWeight.date+'の記録':'記録なし']];
  const stats=analysisTarget==='sleep'?sleepStats:analysisTarget==='weight'?weightStats:[...sleepStats,...weightStats];
  $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${esc(x[0])}</small><strong>${esc(x[1])}</strong><p>${esc(x[2])}</p></div>`).join('');
- $('#analysis-title').textContent=analysisView==='monthly'?`${months[0].replace('-','年')}月〜${analysisMonth.replace('-','年')}月の記録`:`${analysisMonth.replace('-','年')}月の記録`;
- $('#sleep-graph-panel').hidden=analysisTarget==='weight';$('#weight-graph-panel').hidden=analysisTarget==='sleep';
- const data=groupedGraphData(days,analysisView);
- $('#analysis-sleep-title').textContent=`睡眠時間の推移（${analysisView==='daily'?'日別':analysisView==='weekly'?'週別':'月別'}）`;
- $('#analysis-weight-title').textContent=`体重の推移（${analysisView==='daily'?'日別':analysisView==='weekly'?'週別':'月別'}）`;
- $$('.analysis-graph-description').forEach(x=>x.textContent=`横軸：${analysisView==='daily'?'日付':analysisView==='weekly'?'週':'月'}／縦軸：${x.closest('#sleep-graph-panel')?'睡眠時間（時間）':'体重（kg）'}（記録日の平均）`);
+ const title=analysisView==='daily'?`${analysisMonth.replace('-','年')}月の日別記録`:analysisView==='weekly'?`${analysisMonth.replace('-','年')}月の週別記録`:`${analysisMonth.slice(0,4)}年の月別記録`;
+ $('#analysis-title').textContent=title;
+ const periodLabel=analysisView==='daily'?'日付':analysisView==='weekly'?'週': '月';
+ $('#sleep-graph-panel .analysis-graph-description').textContent=`横軸：${periodLabel}／縦軸：睡眠時間（時間）`;
+ $('#weight-graph-panel .analysis-graph-description').textContent=`横軸：${periodLabel}／縦軸：体重（kg）`; 
+ $('#sleep-graph-panel').hidden=analysisTarget==='weight';
+ $('#weight-graph-panel').hidden=analysisTarget==='sleep';
+ const data=graphData(days);
  if(analysisTarget!=='weight')$('#analysis-sleep-chart').innerHTML=svgPlot(data,'sleep');
  if(analysisTarget!=='sleep')$('#analysis-weight-chart').innerHTML=svgPlot(data,'weight');
- const showAll=analysisView==='daily';
- $('#analysis-bars').innerHTML=data.filter(d=>!showAll||d.sleepHours!==null||d.weight!==null).map(d=>{
-  const label=d.label||d.date.slice(5),sleepLabel=d.sleepHours!==null?`${Math.round(d.sleepHours*10)/10}時間`:'未入力',weightLabel=d.weight!==null?`${d.weight.toFixed(1)} kg`:'未入力';
-  if(analysisTarget==='weight')return `<div class="baritem"><div>${esc(label)}</div><div class="record-value-only">体重：${esc(weightLabel)}</div></div>`;
-  return `<div class="baritem"><div>${esc(label)}</div><div class="barbg"><div class="barvalue" style="width:${d.sleepHours!==null?Math.min(100,d.sleepHours/24*100):0}%"></div></div><strong>${esc(sleepLabel)}${analysisTarget==='both'&&weightLabel!=='未入力'?' / '+esc(weightLabel):''}</strong></div>`;
+ // 日次は日付別、週次は週ごと、月次は月ごとに一覧を表示する。
+ // 記録がない期間は0ではなく未入力と表示する。
+ const hoursLimit=analysisView==='daily'?24:analysisView==='weekly'?24*7:24*31;
+ $('#analysis-bars').innerHTML=data.map(item=>{
+  const value=item.sleepHours;
+  const sleepLabel=value===null?'未入力':`${Math.floor(value)}時間${value%1?'30分':''}`;
+  const weightLabel=item.weight===null?'未入力':item.weight.toFixed(1)+' kg';
+  const label=analysisView==='daily'?item.date.slice(5):item.label;
+  if(analysisTarget==='weight')return `<div class="baritem"><div>${esc(label)}</div><div class="record-value-only">体重：${weightLabel}</div></div>`;
+  return `<div class="baritem"><div>${esc(label)}</div><div class="barbg"><div class="barvalue" style="width:${value===null?0:Math.min(100,value/hoursLimit*100)}%"></div></div><strong>${sleepLabel}${analysisTarget==='both'&&weightLabel!=='未入力'?' / '+weightLabel:''}</strong></div>`;
  }).join('')||'<span class="muted">まだ記録がありません</span>';
 }
 
-function renderSettings(){
- applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';updateDatePickerButtons();
- $('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');
- $$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})));
-}
+function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';updateDatePickerButtons();$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})))}
 async function saveSettings(){await action($('#save-settings'),async()=>{
  const newSettings={name:$('#display-name').value.trim().slice(0,60),habitBed:$('#habit-bed').value,habitWake:$('#habit-wake').value,theme:state.settings.theme,firstMonth:$('#first-month').value||''};
- if(newSettings.habitBed===newSettings.habitWake){toast('普段の就寝時刻と起床時刻は異なる時刻を選んでください');return}
- await setDoc(userDoc(),{...newSettings,updatedAt:serverTimestamp()},{merge:true});
- state.settings={...state.settings,...newSettings};renderSettings();renderChart();toast('設定を保存しました');
+ if(newSettings.habitBed===newSettings.habitWake){toast('通常の就寝時刻と起床時刻は異なる時刻を選んでください');return}
+ await setDoc(userDoc(),{...newSettings,updatedAt:serverTimestamp()},{merge:true});state.settings={...state.settings,...newSettings};renderSettings();renderChart();toast('設定を保存しました');
 });}
 function makeId(){return 'med-'+(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,10)}`)}
-// 医薬品とサプリを同一管理。変更時は新規ドキュメントを追加し、変更前を履歴に保存する。
-const timingGroups=[
- ['食前',['毎食前','朝食前','昼食前','夕食前']],
- ['食直前',['毎食直前','朝食直前','昼食直前','夕食直前']],
- ['食後',['毎食後','朝食後','昼食後','夕食後']],
- ['食直後',['毎食直後','朝食直後','昼食直後','夕食直後']],
- ['その他',['毎食間','朝昼の間','昼夕の間','起床時','就寝前','頓服','時刻指定']]
-];
-function medCurrent(m,today=iso(new Date())){return !m.supersededAt&&(!m.start||m.start<=today)&&(!m.end||m.end>=today)}
-function medDateLabel(key){return /^\d{4}-\d{2}-\d{2}$/.test(key||'')?key.replace(/-/g,'/').replace(/\//,'年').replace(/\//,'月')+'日':'開始日未設定'}
-function medUnitLabel(m){const n=validTablets(m.dose);return n===null?'1回量未登録':`${n===0.5?'半':n}${m.unit||'錠'}`}
-function medTitle(m){const strength=m.strength!==undefined&&m.strength!==''&&m.strength!==null?` ${m.strength}${m.strengthUnit||'mg'}`:'';return `${esc(m.name||'名称未登録')}${esc(strength)}`}
-function medInfoHtml(m){
- const timing=Array.isArray(m.timings)?m.timings.join('・'):'';
- const timingText=[timing,m.otherTiming||''].filter(Boolean).join('／')||'服用タイミング未登録';
- return `<div class="med-info"><strong>${medTitle(m)}</strong><div>${esc(m.kind==='supplement'?'サプリメント':'お薬')}・${esc(medUnitLabel(m))}</div><div>${esc(timingText)}</div>${m.end?`<div>服用終了日：${esc(m.end)}</div>`:''}${m.provider?`<div>医療機関・薬局：${esc(m.provider)}</div>`:''}${m.note?`<div class="med-extra-note">${esc(m.note)}</div>`:''}</div>`;
+
+// お薬手帳形式。新しい服用内容は別IDで保存し、変更履歴を保持します。
+function medIsActive(m){return !m.end || m.end>=iso(new Date())}
+function medDisplayDose(m){if(m.dose==null)return '未登録';const n=Number(m.dose);return `${n===0.5?'半':n}${m.unit||'錠'}`}
+function initMedicineTimings(){
+ const groups=[['食前',medicineTimings.slice(0,4)],['食直前',medicineTimings.slice(4,8)],['食後',medicineTimings.slice(8,12)],['食直後',medicineTimings.slice(12,16)],['食間・その他',medicineTimings.slice(16)]];
+ $('#med-timings').innerHTML='<option value="">選択してください</option>'+groups.map(([title,list])=>`<optgroup label="${esc(title)}">${list.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</optgroup>`).join('');
+ $('#med-timings').addEventListener('change',updateMedicineTimingDetail);
 }
-function renderMedications(){
- const target=$('#med-list');if(!target)return;
- $$('.med-list-tabs button').forEach(btn=>btn.classList.toggle('active',btn.dataset.medFilter===medFilter));
- const ms=state.medicines.filter(m=>m.name&& (medFilter==='history'||medCurrent(m))).slice().sort((a,b)=>(b.start||'').localeCompare(a.start||'')||(b.id||'').localeCompare(a.id||''));
- if(!ms.length){target.innerHTML=`<p class="med-empty">${medFilter==='current'?'現在服用中として登録された薬・サプリはありません。':'登録された履歴はありません。'}</p>`;return}
- const group=new Map();ms.forEach(m=>{const key=m.start||'未設定';if(!group.has(key))group.set(key,[]);group.get(key).push(m)});
- target.innerHTML=[...group].map(([date,records])=>`<section class="med-date-group"><h3>${esc(date==='未設定'?'服用開始日未設定':medDateLabel(date)+' 服用開始')}</h3>${records.map(m=>`<div class="med-record">${medInfoHtml(m)}<div class="med-record-buttons"><button type="button" class="btn small" data-med-copy="${esc(m.id)}">この内容から変更登録</button>${medCurrent(m)?`<button type="button" class="btn small" data-med-stop="${esc(m.id)}">服用を終了</button>`:''}</div></div>`).join('')}</section>`).join('');
- target.querySelectorAll('[data-med-copy]').forEach(b=>b.addEventListener('click',()=>populateMedicationForm(state.medicines.find(m=>m.id===b.dataset.medCopy))));
- target.querySelectorAll('[data-med-stop]').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{
-  const m=state.medicines.find(m=>m.id===b.dataset.medStop);if(!m)return;
-  const end=prompt('服用終了日（YYYY-MM-DD）を入力してください',iso(new Date()));
-  if(end===null)return;
-  if(!/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(end)||new Date(end+'T12:00:00').toString()==='Invalid Date'||m.start&&end<m.start){toast('服用開始日以降の正しい終了日を入力してください');return}
-  await setDoc(medRef(m.id),{end,updatedAt:serverTimestamp()},{merge:true});m.end=end;renderMedications();renderInput();toast('服用終了日を記録しました');
- })));
+function updateMedicineTimingDetail(){
+ const needsDetail=['時刻指定','一定時間ごと','その他'].includes($('#med-timings').value);
+ $('#med-timing-other-field').style.display=needsDetail?'':'none';
+ if(!needsDetail)$('#med-timing-other').value='';
 }
-function buildMedTimingChoices(){
- $('#med-timings').innerHTML=timingGroups.map(([group,choices])=>`<fieldset class="med-timing-group"><legend>${group}</legend><div>${choices.map(v=>`<label class="med-timing-choice"><input type="checkbox" name="med-timing" value="${esc(v)}"><span>${esc(v)}</span></label>`).join('')}</div></fieldset>`).join('');
+function resetMedicineForm(copy=null){
+ $('#med-edit-id').value='';$('#med-form-title').textContent='お薬・サプリを登録';
+ $('#med-kind').value=copy?.kind||'medicine';$('#med-name').value=copy?.name||'';
+ $('#med-strength').value=copy?.strength||'';$('#med-dose').value=String(copy?.dose||1);
+ $('#med-unit').value=['錠','包','カプセル','その他'].includes(copy?.unit)?copy.unit:'錠';
+ $('#med-start').value=copy?iso(new Date()):iso(new Date());$('#med-end').value='';
+ $('#med-institution').value=copy?.institution||'';$('#med-note').value=copy?.note||'';
+ const timing=Array.isArray(copy?.timings)?copy.timings[0]||'':copy?.timing||'';
+ $('#med-timings').value=medicineTimings.includes(timing)?timing:'';
+ $('#med-timing-other').value=copy?.timingOther||'';
+ updateMedicineTimingDetail();
+ $('#med-save').textContent='登録を保存';
 }
-function clearMedicationForm(){
- $('#med-form').reset();$('#med-based-on').value='';$('#med-start').value=iso(new Date());$('#med-end').value='';$('#med-form-title').textContent='お薬・サプリを登録';$('#med-submit').textContent='登録する';
- updateDatePickerButtons();
+function editMedicine(id){
+ const m=state.medicines.find(x=>x.id===id);if(!m)return;
+ resetMedicineForm(m);$('#med-edit-id').value=m.id;$('#med-form-title').textContent='登録内容を編集';
+ $('#med-start').value=m.start||iso(new Date());$('#med-end').value=m.end||'';
+ $('#med-save').textContent='変更を保存';
+ $('.medication-form-panel').scrollIntoView({behavior:'smooth',block:'start'});
 }
-function populateMedicationForm(m){
- if(!m)return;$('#med-based-on').value=m.id;$('#med-kind').value=m.kind||'medicine';$('#med-name').value=m.name||'';$('#med-strength').value=m.strength??'';$('#med-strength-unit').value=m.strengthUnit||'mg';$('#med-dose').value=String(validTablets(m.dose)||1);$('#med-unit').value=m.unit||'錠';$('#med-other-timing').value=m.otherTiming||'';$('#med-provider').value=m.provider||'';$('#med-note').value=m.note||'';$('#med-start').value=iso(new Date());$('#med-end').value='';
- const selected=new Set(m.timings||[]);$$('#med-timings input').forEach(x=>x.checked=selected.has(x.value));$('#med-form-title').textContent='内容を変更して新しい履歴を登録';$('#med-submit').textContent='変更内容を登録';updateDatePickerButtons();
- document.querySelector('#med-form').scrollIntoView({behavior:'smooth',block:'start'});
+function renderMedicineList(){
+ $$('#med-filters button').forEach(b=>b.classList.toggle('active',b.dataset.filter===medFilter));
+ const items=state.medicines.filter(m=>(medFilter==='active')===medIsActive(m)).sort((a,b)=>(b.start||'').localeCompare(a.start||'')||a.name.localeCompare(b.name,'ja'));
+ $('#med-list').innerHTML=items.length?items.map(m=>`<article class="med-record">
+  <div class="med-record-top"><strong>${esc(m.name||'名称未設定')}</strong><span class="med-type">${m.kind==='supplement'?'サプリ':'お薬'}</span></div>
+  <p>${m.strength?esc(m.strength)+' ／ ':''}1回 ${esc(medDisplayDose(m))}</p>
+  <p>服用開始日：${esc(m.start||'未設定')}${m.end?' ／ 終了日：'+esc(m.end):''}</p>
+  ${(Array.isArray(m.timings)?m.timings[0]:m.timing)?`<p>タイミング：${esc(Array.isArray(m.timings)?m.timings[0]:m.timing)}</p>`:''}
+  ${m.timingOther?`<p>その他：${esc(m.timingOther)}</p>`:''}
+  ${m.institution?`<p>医療機関・薬局：${esc(m.institution)}</p>`:''}
+  ${m.note?`<p>メモ：${esc(m.note)}</p>`:''}
+  <div class="actions"><button type="button" class="btn small" data-med-edit="${esc(m.id)}">編集</button><button type="button" class="btn small" data-med-copy="${esc(m.id)}">変更内容を新規登録</button><button type="button" class="btn small danger" data-med-delete="${esc(m.id)}">削除</button></div>
+ </article>`).join(''):'<p class="muted">この一覧に登録はありません。</p>';
 }
-async function saveMedication(){await action($('#med-submit'),async()=>{
- const name=$('#med-name').value.trim().slice(0,80),start=$('#med-start').value,end=$('#med-end').value,based=$('#med-based-on').value;
- if(!name){toast('薬・サプリの名前を入力してください');return}
- if(!/^\d{4}-\d{2}-\d{2}$/.test(start)){toast('服用開始日を選択してください');return}
- if(end&&end<start){toast('服用終了日は服用開始日以降を選択してください');return}
- const strengthString=$('#med-strength').value.trim();const strength=strengthString===''?'':Number(strengthString);
- if(strength!==''&&(!Number.isFinite(strength)||strength<=0||strength>100000)){toast('規格・含有量を確認してください');return}
- const timings=$$('#med-timings input:checked').map(x=>x.value);
- if(!timings.length&&!$('#med-other-timing').value.trim()){toast('飲むタイミングを1つ以上選んでください');return}
- const data={kind:$('#med-kind').value,name,strength,strengthUnit:$('#med-strength-unit').value,dose:Number($('#med-dose').value),unit:$('#med-unit').value,timings,otherTiming:$('#med-other-timing').value.trim().slice(0,120),start,end,provider:$('#med-provider').value.trim().slice(0,100),note:$('#med-note').value.trim().slice(0,500),previousId:based||'',updatedAt:serverTimestamp()};
- const newId=makeId(),batch=writeBatch(db);batch.set(medRef(newId),{...data,createdAt:serverTimestamp()});
- const old=state.medicines.find(m=>m.id===based);
- let previousUpdate=null;
- if(old){previousUpdate={supersededAt:start};if(start>old.start){const date=new Date(start+'T12:00:00');date.setDate(date.getDate()-1);previousUpdate.end=iso(date)}batch.set(medRef(old.id),{...previousUpdate,updatedAt:serverTimestamp()},{merge:true})}
- await batch.commit();
- if(old)Object.assign(old,previousUpdate);
- state.medicines.push({id:newId,...data});clearMedicationForm();renderMedications();renderInput();toast('お薬・サプリを登録しました');
+async function saveMedicine(){await action($('#med-save'),async()=>{
+ const name=$('#med-name').value.trim(),start=$('#med-start').value,end=$('#med-end').value;
+ if(!name){toast('薬・サプリの名称を入力してください');return}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(start)){toast('服用開始日を入力してください');return}
+ if(end&&end<start){toast('服用終了日は開始日以降にしてください');return}
+ const dose=Number($('#med-dose').value);
+ if(!doseValues.has(dose)){toast('1回量を確認してください');return}
+ const timing=$('#med-timings').value;
+ if(!medicineTimings.includes(timing)){toast('服用タイミングを1つ選択してください');return}
+ const id=$('#med-edit-id').value||makeId();
+ const data={kind:$('#med-kind').value==='supplement'?'supplement':'medicine',name:name.slice(0,80),strength:$('#med-strength').value.trim().slice(0,60),dose,unit:$('#med-unit').value,start,end,institution:$('#med-institution').value.trim().slice(0,120),timings:[timing],timingOther:['時刻指定','一定時間ごと','その他'].includes(timing)?$('#med-timing-other').value.trim().slice(0,120):'',note:$('#med-note').value.trim().slice(0,500),updatedAt:serverTimestamp()};
+ await setDoc(medRef(id),data,{merge:true});const old=state.medicines.findIndex(m=>m.id===id);
+ const local={...data,id};if(old>=0)state.medicines[old]=local;else state.medicines.push(local);
+ resetMedicineForm();renderMedicineList();toast('お薬・サプリ情報を保存しました');
 });}
+async function removeMedicine(id){
+ const m=state.medicines.find(x=>x.id===id);if(!m)return;
+ if(!window.confirm(`「${m.name||'名称未設定'}」を削除しますか？\nこの操作は元に戻せません。睡眠日誌の◎服薬時刻は残ります。`))return;
+ await action(null,async()=>{await deleteDoc(medRef(id));state.medicines=state.medicines.filter(x=>x.id!==id);renderMedicineList();toast('登録を削除しました')});
+}
+
 /* A4横1枚のPDFを端末の印刷処理に依存せず、ブラウザ内で作成します。
  * 文字・図形はCanvasへ描画し、1ページのJPEG画像としてPDFへ埋め込みます。
  * 氏名・睡眠・服薬データはサーバーへ送らず、端末内でPDFを作成します。
@@ -503,7 +527,7 @@ async function downloadOnePagePdf(){
   const key=dateString(year,month,d),a=state.days[key]||freshDay(),y=top+headH+(d-1)*rowH;
   if(d%2===0){cx.fillStyle='#f3f7fc';cx.fillRect(margin,y,tableW,rowH)}
   const wd=weekday(year,month,d);
-  tx(`${d}（${wd}）`,starts[0]+dims[0]/2,y+rowH/2,'bold 18px sans-serif',dayColorClass(year,month,d)==='sunday'?'#a84252':dayColorClass(year,month,d)==='saturday'?'#365b96':'#26354a','center');
+  tx(`${d}（${wd}）`,starts[0]+dims[0]/2,y+rowH/2,'bold 18px sans-serif',(isJapaneseHoliday(key)||wd==='日')?'#a84252':wd==='土'?'#365b96':'#26354a','center');
   for(let i=0;i<48;i++){
    const cellX=starts[i+1],kind=a.slots?.[i];
    if(kind==='sleep'){cx.fillStyle=theme.sleep;cx.fillRect(cellX+1,y+1,slotW-2,rowH-2)}
@@ -579,18 +603,21 @@ $('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
 $$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisView=b.dataset.view;await renderAnalysis()})));
 $$('#analysis-targets button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisTarget=b.dataset.target;await renderAnalysis()})));
+$('#analysis-month').addEventListener('change',e=>action(e.target,async()=>{if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){toast('年月を確認してください');return}analysisMonth=e.target.value;await renderAnalysis()}));
+function shiftAnalysisMonth(n){const [y,m]=monthParts(analysisMonth),d=new Date(y,m-1+n,1);analysisMonth=dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7);return renderAnalysis()}
+$('#analysis-prev-month').addEventListener('click',()=>action(null,()=>shiftAnalysisMonth(-1)));
+$('#analysis-next-month').addEventListener('click',()=>action(null,()=>shiftAnalysisMonth(1)));
 $('#save-settings').addEventListener('click',saveSettings);
-// お薬・サプリ管理
-buildMedTimingChoices();clearMedicationForm();
-$('#med-form').addEventListener('submit',e=>{e.preventDefault();saveMedication()});
-$('#med-reset').addEventListener('click',clearMedicationForm);
-$('#med-start-picker').addEventListener('click',()=>openDatePicker('medStart'));
-$('#med-end-picker').addEventListener('click',()=>openDatePicker('medEnd'));
-$$('.med-list-tabs button').forEach(b=>b.addEventListener('click',()=>{medFilter=b.dataset.medFilter;renderMedications()}));
-$('#selected-medicine').addEventListener('change',setDoseFromMedicine);
-// 分析画面の独立した年月指定
-$('#analysis-month').addEventListener('change',e=>action(e.target,async()=>{if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))return;analysisMonth=e.target.value;await renderAnalysis()}));
-for(const [id,n] of [['analysis-prev-month',-1],['analysis-next-month',1]])$('#'+id).addEventListener('click',()=>action($('#'+id),async()=>{const [y,m]=monthParts(analysisMonth),d=new Date(y,m-1+n,1);analysisMonth=dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7);await renderAnalysis()}));
+initMedicineTimings();resetMedicineForm();
+$('#med-save').addEventListener('click',saveMedicine);
+$('#med-reset').addEventListener('click',()=>resetMedicineForm());
+$('#med-filters').addEventListener('click',e=>{const b=e.target.closest('button[data-filter]');if(!b)return;medFilter=b.dataset.filter;renderMedicineList()});
+$('#med-list').addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.medEdit)editMedicine(b.dataset.medEdit);
+ if(b.dataset.medCopy){const source=state.medicines.find(x=>x.id===b.dataset.medCopy);if(source){resetMedicineForm(source);$('.medication-form-panel').scrollIntoView({behavior:'smooth',block:'start'});toast('新しい履歴として保存します。元の登録の終了日は必要に応じて編集してください')}}
+ if(b.dataset.medDelete)removeMedicine(b.dataset.medDelete);
+});
 // iPhone Safariで幅が崩れるネイティブ日付・年月入力を、同じ幅のカレンダー選択に置換。
 // Firestoreへの保存形式（YYYY-MM-DD / YYYY-MM）は従来どおり維持。
 let pickerKind='day',pickerYear=2026,pickerMonth=1,pickerDay=1;
@@ -600,7 +627,6 @@ function updateDatePickerButtons(){
  const first=$('#first-month').value||'';
  $('#entry-date-text').textContent=/^\d{4}-\d{2}-\d{2}$/.test(day)?day.replaceAll('-','/'):'日付を選ぶ';
  $('#first-month-text').textContent=/^\d{4}-\d{2}$/.test(first)?first.replace('-','年')+'月':'指定しない';
- for(const key of ['start','end']){const el=$('#med-'+key+'-text');if(el){const v=$('#med-'+key).value;el.textContent=/^\d{4}-\d{2}-\d{2}$/.test(v)?v.replaceAll('-','/'):key==='start'?'日付を選ぶ':'指定しない'}}
 }
 function clampPickerDay(){pickerDay=Math.max(1,Math.min(pickerDay,new Date(pickerYear,pickerMonth,0).getDate()))}
 function pickerStep(n){
@@ -616,7 +642,7 @@ function renderDatePicker(){
  const monthOnly=pickerKind==='month';
  $('#picker-day-area').hidden=monthOnly;
  $('#picker-today').hidden=monthOnly;
- $('#picker-clear').hidden=!(monthOnly||pickerKind==='medEnd');
+ $('#picker-clear').hidden=!monthOnly;
  $('#picker-confirm').textContent=monthOnly?'この月を選ぶ':'この日を選ぶ';
  if(monthOnly)return;
  const weekday=new Date(pickerYear,pickerMonth-1,1).getDay();
@@ -631,19 +657,19 @@ function renderDatePicker(){
 }
 function openDatePicker(kind){
  pickerKind=kind;
- let value=kind==='day'?$('#entry-date').value:kind==='month'?$('#first-month').value:kind==='medStart'?$('#med-start').value:$('#med-end').value;
+ let value=kind==='day'?$('#entry-date').value:$('#first-month').value;
  if(!/^\d{4}-\d{2}/.test(value))value=iso(new Date());
  const chunks=value.split('-').map(Number);
  pickerYear=Math.max(1900,Math.min(2100,chunks[0]));
  pickerMonth=Math.max(1,Math.min(12,chunks[1]||1));
  pickerDay=chunks[2]||1;
  clampPickerDay();
- $('#date-picker-title').textContent=kind==='day'?'記録する日付':kind==='month'?'最初に表示する月':kind==='medStart'?'服用開始日':'服用終了日';
+ $('#date-picker-title').textContent=kind==='day'?'記録する日付':'最初に表示する月';
  renderDatePicker();$('#date-picker-dialog').showModal();
 }
 function applyDatePicker(clear=false){
- const field=pickerKind==='day'?$('#entry-date'):pickerKind==='month'?$('#first-month'):pickerKind==='medStart'?$('#med-start'):$('#med-end');
- field.value=clear?'':(pickerKind==='month'?`${pickerYear}-${pad2(pickerMonth)}`:dateString(pickerYear,pickerMonth,pickerDay));
+ const field=pickerKind==='day'?$('#entry-date'):$('#first-month');
+ field.value=clear?'':(pickerKind==='day'?dateString(pickerYear,pickerMonth,pickerDay):`${pickerYear}-${pad2(pickerMonth)}`);
  $('#date-picker-dialog').close();
  updateDatePickerButtons();
  // 既存のFirestoreデータ再取得処理に連携。設定側は「設定を保存」で確定。
@@ -660,7 +686,7 @@ $('#picker-prev').addEventListener('click',()=>pickerStep(-1));
 $('#picker-next').addEventListener('click',()=>pickerStep(1));
 $('#picker-days').addEventListener('click',e=>{const b=e.target.closest('button[data-day]');if(!b)return;pickerDay=Number(b.dataset.day);renderDatePicker()});
 $('#picker-today').addEventListener('click',()=>{const now=new Date();pickerYear=now.getFullYear();pickerMonth=now.getMonth()+1;pickerDay=now.getDate();renderDatePicker()});
-$('#picker-clear').addEventListener('click',()=>{if(pickerKind==='month'||pickerKind==='medEnd')applyDatePicker(true)});
+$('#picker-clear').addEventListener('click',()=>{if(pickerKind==='month')applyDatePicker(true)});
 $('#picker-confirm').addEventListener('click',()=>applyDatePicker());
 $('#date-picker-dialog').addEventListener('click',e=>{if(e.target.id==='date-picker-dialog')e.target.close()});
 
