@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.8 (2026-11-02) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.9 (2026-11-03) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -90,7 +90,7 @@ const doseValues=new Set([0.5,1,2,3,4,5,6,7,8]);
 const medicineTimings=['毎食前','朝食前','昼食前','夕食前','毎食直前','朝食直前','昼食直前','夕食直前','毎食後','朝食後','昼食後','夕食後','毎食直後','朝食直後','昼食直後','夕食直後','毎食間','朝昼の間','昼夕の間','起床時','就寝前','頓服（必要なとき）','時刻指定','一定時間ごと','その他'];
 
 const state={month:iso(new Date()).slice(0,7),selected:iso(new Date()),settings:blankSettings(),days:{},medicines:[],loadedMonths:new Set()};
-let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),analysisWeek='',analysisViewportKey='',weekBoundsCached=false,earliestRecordDate='',latestRecordDate='',currentUser=null, sessionEpoch=0, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
+let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),analysisWeek='',analysisViewportKey='',weekBoundsCached=false,weekBoundsReliable=false,earliestRecordDate='',latestRecordDate='',currentUser=null, sessionEpoch=0, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>el.classList.remove('show'),3600)}
 function notice(msg){$('#auth-notice').textContent=msg;$('#auth-notice').classList.add('show')}
@@ -147,7 +147,7 @@ async function loadInitial(){
  if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.settings.firstMonth||''))state.month=state.settings.firstMonth;
  state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
- weekBoundsCached=false;earliestRecordDate='';latestRecordDate='';
+ weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';
  await loadMonth(state.month);analysisMonth=state.month;analysisWeek='';analysisViewportKey='';
  applyTheme();renderChart();renderInput();renderSettings();await renderAnalysis();
 }
@@ -201,7 +201,6 @@ function printPattern(kind){
 }
 function renderChart(){
  const [y,m]=monthParts(state.month),n=new Date(y,m,0).getDate();
- $('#jump-month').value=state.month;
  $('#month-label').textContent=`${y}年 ${m}月`;
  $('#print-month').textContent=`${y}年${m}月`;
  $('#print-range').textContent=`${y}年${m}月1日〜${m}月${n}日`;
@@ -336,14 +335,33 @@ function weekLabel(start){
 async function ensureWeekBounds(){
  if(weekBoundsCached)return;
  assertSession();const uid=currentUser.uid,col=collection(db,'users',uid,'days');
- // 日誌の全件を読み取らず、最初と最後の記録日だけを取得する。
- const [first,last]=await Promise.all([
-  getDocs(query(col,orderBy(documentId()),limit(1))),
-  getDocs(query(col,orderBy(documentId(),'desc'),limit(1)))
- ]);
+ let first='',last='',reliable=false;
+ try{
+  // まず先頭・末尾だけを取得して読み取り数を抑える。
+  const [oldest,newest]=await Promise.all([
+   getDocs(query(col,orderBy(documentId()),limit(1))),
+   getDocs(query(col,orderBy(documentId(),'desc'),limit(1)))
+  ]);
+  first=oldest.docs[0]?.id||'';
+  last=newest.docs[0]?.id||'';
+  reliable=true;
+ }catch(e){
+  // 一部のFirestore設定・旧環境で並び順付き取得が失敗しても週次を使用可能にする。
+  console.warn('週次の記録期間取得：並び順付き取得に失敗。再取得します。',e);
+  try{
+   const all=await getDocs(col);
+   const keys=all.docs.map(d=>d.id).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+   first=keys[0]||'';last=keys.at(-1)||'';
+   reliable=true;
+  }catch(e2){
+   console.warn('週次の記録期間取得：読み込み済みの日付を利用します。',e2);
+  }
+ }
  if(uid!==currentUser?.uid)return;
- earliestRecordDate=first.docs[0]?.id||'';
- latestRecordDate=last.docs[0]?.id||'';
+ const known=Object.keys(state.days).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+ earliestRecordDate=first||known[0]||'';
+ latestRecordDate=last||known.at(-1)||'';
+ weekBoundsReliable=reliable;
  weekBoundsCached=true;
 }
 function selectableWeeks(){
@@ -435,7 +453,6 @@ async function renderAnalysis(){
  const chartWeeks=weekly?weeklyChartWeeks(weeks,analysisWeek):[];
  const days=weekly?chartWeeks.flatMap(w=>w.days):getRange();
  const statDays=weekly?(weeks.find(w=>w.key===analysisWeek)?.days||[]):monthDays(analysisMonth);
- if(currentUser?.emailVerified){const months=[...new Set([...days,...statDays].map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
  $('#analysis-month').value=analysisMonth;
  $('#analysis-month-group').hidden=weekly;
  $$('#analysis-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===analysisView));
@@ -444,8 +461,9 @@ async function renderAnalysis(){
  if(weekly){
   $('#analysis-week').innerHTML=weeks.map(w=>`<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('');
   $('#analysis-week').value=analysisWeek;
-  $('#analysis-first-record').textContent=earliestRecordDate?`最初の記録日：${earliestRecordDate.slice(0,4)}年${earliestRecordDate.slice(5,7)}月${earliestRecordDate.slice(8,10)}日`:'まだ記録がありません';
+  $('#analysis-first-record').textContent=earliestRecordDate?`${weekBoundsReliable?'最初の記録日':'確認できた記録の開始日'}：${earliestRecordDate.slice(0,4)}年${earliestRecordDate.slice(5,7)}月${earliestRecordDate.slice(8,10)}日`:'まだ記録がありません';
  }
+ if(currentUser?.emailVerified){const months=[...new Set([...days,...statDays].map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
  const s=sumFor(statDays),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
  const weightAvg=s.weights.length?(s.weights.reduce((sum,x)=>sum+x.value,0)/s.weights.length).toFixed(1)+' kg':'—';
  const latestWeight=s.weights.at(-1);
@@ -657,7 +675,7 @@ $('#verify-logout').addEventListener('click',()=>action($('#verify-logout'),()=>
 $('#change-email').addEventListener('click',changeEmail);$('#reset-signed-password').addEventListener('click',passwordResetSigned);$('#send-verification-settings').addEventListener('click',reloadEmailStatus);
 // 日誌
 fillTimes();$$('.tab').forEach(b=>b.addEventListener('click',()=>action(null,()=>show(b.dataset.tab))));
-$('#jump-month').addEventListener('change',e=>action(e.target,()=>jumpMonth(e.target.value)));$('#prev-month').addEventListener('click',()=>action($('#prev-month'),()=>monthShift(-1)));$('#next-month').addEventListener('click',()=>action($('#next-month'),()=>monthShift(1)));
+$('#month-label').addEventListener('click',()=>openDatePicker('report-month'));$('#prev-month').addEventListener('click',()=>action($('#prev-month'),()=>monthShift(-1)));$('#next-month').addEventListener('click',()=>action($('#next-month'),()=>monthShift(1)));
 $('#open-guide').addEventListener('click',()=>$('#guide-dialog').showModal());$('#close-guide').addEventListener('click',()=>$('#guide-dialog').close());$('#guide-dialog').addEventListener('click',e=>{if(e.target.id==='guide-dialog')e.target.close()});
 $('#print-button').addEventListener('click',()=>{
  // スマートフォンの印刷メニューはA4の向き・改ページが端末依存のため、1枚のPDFを保存してから印刷する。
@@ -711,10 +729,10 @@ function pickerStep(n){
 function renderDatePicker(){
  $('#picker-year').value=String(pickerYear);
  $('#picker-month').value=String(pickerMonth);
- const monthOnly=pickerKind==='month';
+ const monthOnly=pickerKind==='month'||pickerKind==='report-month';
  $('#picker-day-area').hidden=monthOnly;
  $('#picker-today').hidden=monthOnly;
- $('#picker-clear').hidden=!(monthOnly||pickerKind==='med-end');
+ $('#picker-clear').hidden=!(pickerKind==='month'||pickerKind==='med-end');
  $('#picker-confirm').textContent=monthOnly?'この月を選ぶ':'この日を選ぶ';
  if(monthOnly)return;
  const weekday=new Date(pickerYear,pickerMonth-1,1).getDay();
@@ -729,17 +747,18 @@ function renderDatePicker(){
 }
 function openDatePicker(kind){
  pickerKind=kind;
- let value=kind==='day'?$('#entry-date').value:kind==='month'?$('#first-month').value:$('#'+kind).value;
+ let value=kind==='day'?$('#entry-date').value:kind==='month'?$('#first-month').value:kind==='report-month'?state.month:$('#'+kind).value;
  if(!/^\d{4}-\d{2}/.test(value))value=iso(new Date());
  const chunks=value.split('-').map(Number);
  pickerYear=Math.max(1900,Math.min(2100,chunks[0]));
  pickerMonth=Math.max(1,Math.min(12,chunks[1]||1));
  pickerDay=chunks[2]||1;
  clampPickerDay();
- $('#date-picker-title').textContent=({day:'記録する日付',month:'最初に表示する月','med-start':'服用開始日','med-end':'服用終了日'})[kind]||'日付を選ぶ';
+ $('#date-picker-title').textContent=({day:'記録する日付',month:'最初に表示する月','report-month':'表示する月','med-start':'服用開始日','med-end':'服用終了日'})[kind]||'日付を選ぶ';
  renderDatePicker();$('#date-picker-dialog').showModal();
 }
 function applyDatePicker(clear=false){
+ if(pickerKind==='report-month'){const month=`${pickerYear}-${pad2(pickerMonth)}`;$('#date-picker-dialog').close();action(null,()=>jumpMonth(month));return}
  const field=pickerKind==='day'?$('#entry-date'):pickerKind==='month'?$('#first-month'):$('#'+pickerKind);
  field.value=clear?'':(pickerKind==='month'?`${pickerYear}-${pad2(pickerMonth)}`:dateString(pickerYear,pickerMonth,pickerDay));
  $('#date-picker-dialog').close();
