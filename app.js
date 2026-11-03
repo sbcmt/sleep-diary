@@ -90,7 +90,7 @@ const doseValues=new Set([0.5,1,2,3,4,5,6,7,8]);
 const medicineTimings=['毎食前','朝食前','昼食前','夕食前','毎食直前','朝食直前','昼食直前','夕食直前','毎食後','朝食後','昼食後','夕食後','毎食直後','朝食直後','昼食直後','夕食直後','毎食間','朝昼の間','昼夕の間','起床時','就寝前','頓服（必要なとき）','時刻指定','一定時間ごと','その他'];
 
 const state={month:iso(new Date()).slice(0,7),selected:iso(new Date()),settings:blankSettings(),days:{},medicines:[],loadedMonths:new Set()};
-let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),currentUser=null, sessionEpoch=0, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
+let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),analysisWeek='',analysisViewportKey='',currentUser=null, sessionEpoch=0, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>el.classList.remove('show'),3600)}
 function notice(msg){$('#auth-notice').textContent=msg;$('#auth-notice').classList.add('show')}
@@ -147,7 +147,7 @@ async function loadInitial(){
  if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.settings.firstMonth||''))state.month=state.settings.firstMonth;
  state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
- await loadMonth(state.month);analysisMonth=state.month;
+ await loadMonth(state.month);analysisMonth=state.month;analysisWeek='';analysisViewportKey='';
  applyTheme();renderChart();renderInput();renderSettings();renderAnalysis();
 }
 async function persistDay(key){assertSession();const item=normalDay(key);await setDoc(dayRef(key),{...item,updatedAt:serverTimestamp()});}
@@ -319,34 +319,45 @@ async function saveDay(){await action($('#save-day'),async()=>{
  catch(e){state.days[state.selected]=before;renderInput();throw e}
 });}
 function sumFor(days){let s=0,r=0,recorded=0,sleepRecorded=0,weights=[],wake={'無':0,'弱':0,'強':0},day={'無':0,'弱':0,'強':0};for(const key of days){const a=state.days[key];if(!a)continue;const sn=(a.slots||[]).filter(v=>v==='sleep').length*30,rn=(a.slots||[]).filter(v=>v==='rest').length*30;if(sn||rn)sleepRecorded++;if(validWeight(a.weight)!==null)weights.push({date:key,value:validWeight(a.weight)});if(sn||rn||(a.markers||[]).length||a.note||a.wakeSleepiness||a.daySleepiness||validWeight(a.weight)!==null){recorded++;s+=sn;r+=rn;if(a.wakeSleepiness)wake[a.wakeSleepiness]=(wake[a.wakeSleepiness]||0)+1;if(a.daySleepiness)day[a.daySleepiness]=(day[a.daySleepiness]||0)+1}}return {s,r,recorded,sleepRecorded,wake,day,weights}}
-function getRange(){const [y,m]=monthParts(analysisMonth);const out=[];
- if(analysisView==='monthly'){for(let month=1;month<=12;month++){const n=new Date(y,month,0).getDate();for(let d=1;d<=n;d++)out.push(dateString(y,month,d))}}
- else{const n=new Date(y,m,0).getDate();for(let d=1;d<=n;d++)out.push(dateString(y,m,d))}
- return out;
-}
-// 表示対象は「両方」「睡眠のみ」「体重のみ」。異なる単位のグラフを重ねない。
-// 記録がない日は0や推測値で補完せず、グラフ上も欠測として表示。
-function graphData(days){
- const entries=days.map(key=>{const day=state.days[key];return {date:key,sleepHours:day&&(day.slots||[]).some(slot=>slot==='sleep'||slot==='rest')?(day.slots||[]).filter(v=>v==='sleep').length*0.5:null,weight:day?validWeight(day.weight):null}});
- if(analysisView==='daily')return entries;
- const byPeriod=new Map();
- for(const item of entries){
-  let period;
-  if(analysisView==='monthly')period=item.date.slice(0,7);
-  else {const dt=new Date(item.date+'T12:00:00');const day=(dt.getDay()+6)%7;dt.setDate(dt.getDate()-day);period=iso(dt)}
-  if(!byPeriod.has(period))byPeriod.set(period,{date:period,sleepHours:null,weight:null,weights:[],label:analysisView==='monthly'?period.slice(5)+'月':period.slice(5).replace('-','/')+'週'});
-  const a=byPeriod.get(period);if(item.sleepHours!==null)a.sleepHours=(a.sleepHours??0)+item.sleepHours;if(item.weight!==null)a.weights.push(item.weight);
+// 日次・週次のグラフは選択した月、月次グラフはその年の12か月を表示する。
+function monthDays(month){const [y,m]=monthParts(month),n=new Date(y,m,0).getDate();return Array.from({length:n},(_,i)=>dateString(y,m,i+1))}
+function weekStart(key){const dt=new Date(key+'T12:00:00');dt.setDate(dt.getDate()-(dt.getDay()+6)%7);return iso(dt)}
+function weeksInMonth(month){const groups=new Map();for(const key of monthDays(month)){
+ const start=weekStart(key);if(!groups.has(start))groups.set(start,{key:start,days:[],first:key,last:key});
+ const w=groups.get(start);w.days.push(key);w.last=key;
  }
- return [...byPeriod.values()].map(a=>({...a,weight:a.weights.length?a.weights.reduce((x,y)=>x+y,0)/a.weights.length:null}));
+ return [...groups.values()].map(w=>({...w,label:`${Number(w.first.slice(5,7))}/${Number(w.first.slice(8))}〜${Number(w.last.slice(5,7))}/${Number(w.last.slice(8))}`}));
 }
-function chartXLabel(key,period){return period==='monthly'?key.slice(5)+'月':key.slice(5).replace('-','/');}
+function getRange(){return analysisView==='monthly'?Array.from({length:12},(_,i)=>monthDays(`${analysisMonth.slice(0,4)}-${String(i+1).padStart(2,'0')}`)).flat():monthDays(analysisMonth)}
+// 記録なしの日は平均から除外する。週・月の睡眠量は「合計」でなく記録日の1日平均に統一する。
+function graphData(days){
+ const entries=days.map(key=>{const a=state.days[key];return {date:key,sleepHours:a&&(a.slots||[]).some(slot=>slot==='sleep'||slot==='rest')?(a.slots||[]).filter(v=>v==='sleep').length*.5:null,weight:a?validWeight(a.weight):null}});
+ if(analysisView==='daily')return entries;
+ const groups=new Map();
+ for(const item of entries){
+  const key=analysisView==='monthly'?item.date.slice(0,7):weekStart(item.date);
+  if(!groups.has(key))groups.set(key,{key,date:item.date,last:item.date,sleepTotal:0,sleepDays:0,weightTotal:0,weightDays:0});
+  const g=groups.get(key);g.last=item.date;
+  if(item.sleepHours!==null){g.sleepTotal+=item.sleepHours;g.sleepDays++}
+  if(item.weight!==null){g.weightTotal+=item.weight;g.weightDays++}
+ }
+ return [...groups.values()].map(g=>({
+  date:g.date,weekKey:g.key,
+  label:analysisView==='monthly'?`${Number(g.key.slice(5))}月`:`${Number(g.date.slice(5,7))}/${Number(g.date.slice(8))}〜${Number(g.last.slice(5,7))}/${Number(g.last.slice(8))}`,
+  sleepHours:g.sleepDays?g.sleepTotal/g.sleepDays:null,
+  weight:g.weightDays?g.weightTotal/g.weightDays:null,
+  sleepDays:g.sleepDays,weightDays:g.weightDays
+ }));
+}
+function chartXLabel(key,period){const [m,d]=key.slice(5).split('-').map(Number);return period==='monthly'?`${m}月`:`${m}/${d}`;}
+function formatHours(hours){if(hours===null)return '未入力';const mins=Math.round(hours*60);return `${Math.floor(mins/60)}時間${mins%60?`${mins%60}分`:''}`;}
 function chartNumber(n){return Number.isInteger(n)?String(n):n.toFixed(1)}
 function graphEmpty(label){return `<div class="graph-empty" role="status">${esc(label)}の記録はありません</div>`}
 function svgPlot(data,type){
  const weightMode=type==='weight',field=weightMode?'weight':'sleepHours';
  const recorded=data.map((d,i)=>({...d,i})).filter(d=>d[field]!==null);
  if(!recorded.length)return graphEmpty(weightMode?'体重':'睡眠');
- const W=Math.max(560,data.length*27+110),H=310,L=58,R=20,T=22,B=55;
+ const W=analysisView==='daily'?Math.max(620,data.length*27+100):analysisView==='weekly'?430:390,H=310,L=58,R=20,T=22,B=55;
  const plotW=W-L-R,plotH=H-T-B;
  let yMin=0,yMax=12;
  if(weightMode){
@@ -364,10 +375,10 @@ function svgPlot(data,type){
  const ticks=data.map((d,i)=>i%step===0||i===data.length-1?`<text x="${x(i).toFixed(2)}" y="${H-B+20}" text-anchor="middle" class="svg-axis">${esc(chartXLabel(d.date,analysisView))}</text>`:'').join('');
  let drawing='';
  if(!weightMode){
-  const barW=Math.max(5,Math.min(23,plotW/data.length*0.65));
+  const barW=Math.max(5,Math.min(25,plotW/data.length*0.68));
   drawing=recorded.map(d=>{
    const yy=y(d.sleepHours),hh=Math.max(0,T+plotH-yy);
-   return `<rect class="svg-sleep-bar" x="${(x(d.i)-barW/2).toFixed(2)}" y="${yy.toFixed(2)}" width="${barW.toFixed(2)}" height="${hh.toFixed(2)}" rx="2"><title>${esc(d.date)}：${chartNumber(d.sleepHours)}時間</title></rect>`;
+   return `<rect class="svg-sleep-bar" x="${(x(d.i)-barW/2).toFixed(2)}" y="${yy.toFixed(2)}" width="${barW.toFixed(2)}" height="${hh.toFixed(2)}" rx="2"><title>${esc(d.date)}：${formatHours(d.sleepHours)}（1日平均）</title></rect>`;
   }).join('');
  }else{
   // 連続して実測値が存在する日付の間だけ接続（空白の日を補間しない）。
@@ -377,7 +388,7 @@ function svgPlot(data,type){
   data.forEach((d,i)=>{if(d.weight===null){flush()}else seq.push({...d,i})});flush();
   drawing=parts.join('')+recorded.map(d=>`<circle class="svg-weight-point" cx="${x(d.i).toFixed(2)}" cy="${y(d.weight).toFixed(2)}" r="4.4"><title>${esc(d.date)}：${d.weight.toFixed(1)} kg</title></circle>`).join('');
  }
- return `<svg class="analysis-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${weightMode?'体重（kg）':'睡眠時間（時間）'}の日付別${weightMode?'折れ線':'棒'}グラフ。記録のない日は空白。"><text x="${L}" y="13" class="svg-unit">${weightMode?'体重（kg）':'睡眠時間（時間）'}</text>${grid}<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" class="svg-axis-line"/>${ticks}${drawing}<text x="${W-R}" y="${H-6}" text-anchor="end" class="svg-unit">日付</text></svg>`;
+ return `<svg class="analysis-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" ${analysisView==='daily'?'':'style="max-width:100%;height:auto"'} role="img" aria-label="${weightMode?'体重（kg）':'睡眠時間（時間）'}の${analysisView==='daily'?'日別':analysisView==='weekly'?'週別':'月別'}${weightMode?'平均の折れ線':'平均の棒'}グラフ。記録のない日は空白。"><text x="${L}" y="13" class="svg-unit">${weightMode?'体重（kg）':'睡眠時間（時間）'}</text>${grid}<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" class="svg-axis-line"/>${ticks}${drawing}<text x="${W-R}" y="${H-6}" text-anchor="end" class="svg-unit">日付</text></svg>`;
 }
 async function renderAnalysis(){
  const days=getRange();
@@ -385,33 +396,51 @@ async function renderAnalysis(){
  $('#analysis-month').value=analysisMonth;
  $$('#analysis-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===analysisView));
  $$('#analysis-targets button').forEach(b=>{const active=b.dataset.target===analysisTarget;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});
- const s=sumFor(days),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
+ // 週次は選択月内の週だけから集計週を選択する。月をまたぐ週も対象月以外の日は含めない。
+ const weekly=analysisView==='weekly',weeks=weeksInMonth(analysisMonth);
+ $('#analysis-week-group').hidden=!weekly;
+ if(weekly){
+  if(!weeks.some(w=>w.key===analysisWeek)){
+   const today=iso(new Date());
+   analysisWeek=today.startsWith(analysisMonth)?weekStart(today):weeks.at(-1)?.key||'';
+  }
+  $('#analysis-week').innerHTML=weeks.map(w=>`<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('');
+  $('#analysis-week').value=analysisWeek;
+ }
+ const statDays=weekly?(weeks.find(w=>w.key===analysisWeek)?.days||[]):monthDays(analysisMonth);
+ const s=sumFor(statDays),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
  const weightAvg=s.weights.length?(s.weights.reduce((sum,x)=>sum+x.value,0)/s.weights.length).toFixed(1)+' kg':'—';
  const latestWeight=s.weights.at(-1);
- const sleepStats=[['記録した睡眠 合計',fmt(s.s),'自分で「熟睡」とした時間'],['休息 合計',fmt(s.r),'起きて布団の中にいた時間'],['記録のある日',`${s.recorded}日`,'対象期間内の登録'],['記録日の平均睡眠',s.sleepRecorded?fmt(Math.round(s.s/s.sleepRecorded/30)*30):'—','睡眠・休息の入力がある日で計算']];
+ const prefix=analysisMonth.replace('-','年')+'月';
+ const week=weeks.find(w=>w.key===analysisWeek);
+ $('#analysis-stats-period').textContent=weekly?`${prefix} ${week?.label||''}の集計（選択した週）`:`${prefix}の集計（選択した月）`;
+ const sleepStats=[['記録した睡眠 合計',fmt(s.s),'自分で「熟睡」とした時間'],['休息 合計',fmt(s.r),'起きて布団の中にいた時間'],['記録のある日',`${s.recorded}日`,'上記の対象期間内の登録'],['記録日の平均睡眠',s.sleepRecorded?fmt(Math.round(s.s/s.sleepRecorded)):'—',`睡眠・休息の入力がある${s.sleepRecorded}日で計算`]];
  const weightStats=[['体重 平均',weightAvg,`体重入力のある${s.weights.length}日で計算`],['期間内の直近体重',latestWeight?latestWeight.value.toFixed(1)+' kg':'—',latestWeight?latestWeight.date+'の記録':'記録なし']];
  const stats=analysisTarget==='sleep'?sleepStats:analysisTarget==='weight'?weightStats:[...sleepStats,...weightStats];
  $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${esc(x[0])}</small><strong>${esc(x[1])}</strong><p>${esc(x[2])}</p></div>`).join('');
- const title=analysisView==='daily'?`${analysisMonth.replace('-','年')}月の日別記録`:analysisView==='weekly'?`${analysisMonth.replace('-','年')}月の週別記録`:`${analysisMonth.slice(0,4)}年の月別記録`;
+ const title=analysisView==='daily'?`${prefix}の日別記録`:analysisView==='weekly'?`${prefix}の週別記録`:`${analysisMonth.slice(0,4)}年の月別記録`;
  $('#analysis-title').textContent=title;
- const periodLabel=analysisView==='daily'?'日付':analysisView==='weekly'?'週': '月';
- $('#sleep-graph-panel .analysis-graph-description').textContent=`横軸：${periodLabel}／縦軸：睡眠時間（時間）`;
- $('#weight-graph-panel .analysis-graph-description').textContent=`横軸：${periodLabel}／縦軸：体重（kg）`; 
+ const periodLabel=analysisView==='daily'?'日付':analysisView==='weekly'?'週':'月';
+ $('#sleep-graph-panel .analysis-graph-description').textContent=`横軸：${periodLabel}／縦軸：${analysisView==='daily'?'睡眠時間':'記録日の平均睡眠時間'}（時間）`;
+ $('#weight-graph-panel .analysis-graph-description').textContent=`横軸：${periodLabel}／縦軸：${analysisView==='daily'?'体重':'平均体重'}（kg）`;
  $('#sleep-graph-panel').hidden=analysisTarget==='weight';
  $('#weight-graph-panel').hidden=analysisTarget==='sleep';
  const data=graphData(days);
  if(analysisTarget!=='weight')$('#analysis-sleep-chart').innerHTML=svgPlot(data,'sleep');
  if(analysisTarget!=='sleep')$('#analysis-weight-chart').innerHTML=svgPlot(data,'weight');
- // 日次は日付別、週次は週ごと、月次は月ごとに一覧を表示する。
- // 記録がない期間は0ではなく未入力と表示する。
- const hoursLimit=analysisView==='daily'?24:analysisView==='weekly'?24*7:24*31;
+ // 表示モード・対象月が変わったとき、以前の横スクロール位置を引き継がない。
+ const viewportKey=`${analysisMonth}|${analysisView}`;
+ if(viewportKey!==analysisViewportKey){
+  $$('.analysis-graph-frame').forEach(el=>{el.scrollLeft=0});
+  analysisViewportKey=viewportKey;
+ }
  $('#analysis-bars').innerHTML=data.map(item=>{
   const value=item.sleepHours;
-  const sleepLabel=value===null?'未入力':`${Math.floor(value)}時間${value%1?'30分':''}`;
+  const sleepLabel=value===null?'未入力':formatHours(value);
   const weightLabel=item.weight===null?'未入力':item.weight.toFixed(1)+' kg';
   const label=analysisView==='daily'?item.date.slice(5):item.label;
   if(analysisTarget==='weight')return `<div class="baritem"><div>${esc(label)}</div><div class="record-value-only">体重：${weightLabel}</div></div>`;
-  return `<div class="baritem"><div>${esc(label)}</div><div class="barbg"><div class="barvalue" style="width:${value===null?0:Math.min(100,value/hoursLimit*100)}%"></div></div><strong>${sleepLabel}${analysisTarget==='both'&&weightLabel!=='未入力'?' / '+weightLabel:''}</strong></div>`;
+  return `<div class="baritem"><div>${esc(label)}</div><div class="barbg"><div class="barvalue" style="width:${value===null?0:Math.min(100,value/24*100)}%"></div></div><strong>${sleepLabel}${analysisTarget==='both'&&weightLabel!=='未入力'?' / '+weightLabel:''}</strong></div>`;
  }).join('')||'<span class="muted">まだ記録がありません</span>';
 }
 
@@ -603,8 +632,9 @@ $('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
 $$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisView=b.dataset.view;await renderAnalysis()})));
 $$('#analysis-targets button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisTarget=b.dataset.target;await renderAnalysis()})));
-$('#analysis-month').addEventListener('change',e=>action(e.target,async()=>{if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){toast('年月を確認してください');return}analysisMonth=e.target.value;await renderAnalysis()}));
-function shiftAnalysisMonth(n){const [y,m]=monthParts(analysisMonth),d=new Date(y,m-1+n,1);analysisMonth=dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7);return renderAnalysis()}
+$('#analysis-month').addEventListener('change',e=>action(e.target,async()=>{if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){toast('年月を確認してください');return}analysisMonth=e.target.value;analysisWeek='';await renderAnalysis()}));
+$('#analysis-week').addEventListener('change',e=>action(null,async()=>{analysisWeek=e.target.value;await renderAnalysis()}));
+function shiftAnalysisMonth(n){const [y,m]=monthParts(analysisMonth),d=new Date(y,m-1+n,1);analysisMonth=dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7);analysisWeek='';return renderAnalysis()}
 $('#analysis-prev-month').addEventListener('click',()=>action(null,()=>shiftAnalysisMonth(-1)));
 $('#analysis-next-month').addEventListener('click',()=>action(null,()=>shiftAnalysisMonth(1)));
 $('#save-settings').addEventListener('click',saveSettings);

@@ -365,3 +365,8 @@
  .med-date-row .date-picker-trigger{padding-inline:5px}
  .med-date-row .picker-button-symbol{display:none}
 }
+
+/* v1.0.8 集計期間と週選択を表示（既存パネルのレイアウトは維持）。 */
+.analysis-control-group[hidden]{display:none!important}
+#analysis-week{min-width:0;width:200px;max-width:100%;height:40px;border:1px solid var(--border);background:#fff;color:var(--ink);border-radius:8px;padding:6px 9px;font-size:16px}
+.analysis-stats-period{font-size:13px;font-weight:700;color:var(--ink);margin:0 0 10px}
