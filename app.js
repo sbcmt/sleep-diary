@@ -144,7 +144,8 @@ async function loadInitial(){
  const [settingsSnap,medsSnap]=await Promise.all([getDoc(userDoc()),getDocs(collection(db,'users',uid,'medications'))]);
  if(uid!==currentUser?.uid)return;
  state.settings={...blankSettings(),...(settingsSnap.exists()?settingsSnap.data():{})};
- if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.settings.firstMonth||''))state.month=state.settings.firstMonth;
+ // 月間睡眠表の初期表示は必ず開いた日の当月とする。保存済み初期月の指定は参照しない。
+ state.month=iso(new Date()).slice(0,7);
  state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
  weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';
@@ -224,7 +225,12 @@ function renderChart(){
 async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('年月を正しく指定してください');return}await loadMonth(month);state.month=month;renderChart();await renderAnalysis()}
 async function monthShift(n){const [y,m]=monthParts(state.month),d=new Date(y,m-1+n,1);await jumpMonth(dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7))}
 async function show(tab){
- if(tab==='report')await loadMonth(state.month);
+ if(tab==='report'){
+  // 月間睡眠表を開くたびに当月へ戻す。画面内の前月／翌月操作は維持する。
+  const currentMonth=iso(new Date()).slice(0,7);
+  await loadMonth(currentMonth);
+  state.month=currentMonth;
+ }
  if(tab==='input')await loadMonth(state.selected.slice(0,7));
  if(tab==='analysis'){
   // 分析画面を開くたびに当日・当月・当日を含む日曜始まりの週へ戻す。
