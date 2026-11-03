@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.11 (2026-11-03) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.2 (2026-11-03) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -231,7 +231,7 @@ async function show(tab){
   const today=iso(new Date());analysisDay=today;analysisMonth=today.slice(0,7);analysisWeek=weekStart(today);analysisViewportKey='';
  }
  $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$$('.screen').forEach(s=>s.classList.toggle('active',s.id===`screen-${tab}`));
- if(tab==='report')renderChart();if(tab==='input')renderInput();if(tab==='settings')renderSettings();if(tab==='medicines'){renderMedicineList();resetMedicineForm()}if(tab==='analysis')await renderAnalysis();window.scrollTo({top:0,behavior:'instant'});
+ if(tab==='report')renderChart();if(tab==='input')renderInput();if(tab==='settings')renderSettings();if(tab==='medicines'){renderMedicineList();resetMedicineForm();showMedicinePanel('list')}if(tab==='analysis')await renderAnalysis();window.scrollTo({top:0,behavior:'instant'});
 }
 function fillTimes(){const options=Array.from({length:49},(_,i)=>`<option value="${time(i)}">${time(i)}</option>`).join('');$$('#entry-start,#entry-end,#habit-bed,#habit-wake').forEach(el=>el.innerHTML=options);$('#entry-start').value='23:00';$('#entry-end').value='23:30'}
 function renderModes(){
@@ -555,12 +555,28 @@ function resetMedicineForm(copy=null){
  updateMedicineTimingDetail();
  $('#med-save').textContent='登録を保存';
 }
+// v1.2.2：服用一覧と入力フォームは別画面。フォームは新規・編集・履歴コピーからのみ表示。
+function showMedicinePanel(which){
+ const form=which==='form';
+ $('#med-list-view').hidden=form;
+ $('#med-form-view').hidden=!form;
+ window.scrollTo({top:0,behavior:'instant'});
+}
+function openNewMedicineForm(copy=null){
+ resetMedicineForm(copy);
+ showMedicinePanel('form');
+}
+function closeMedicineForm(){
+ resetMedicineForm();
+ renderMedicineList();
+ showMedicinePanel('list');
+}
 function editMedicine(id){
  const m=state.medicines.find(x=>x.id===id);if(!m)return;
  resetMedicineForm(m);$('#med-edit-id').value=m.id;$('#med-form-title').textContent='登録内容を編集';
  $('#med-start').value=m.start||iso(new Date());$('#med-end').value=m.end||'';updateDatePickerButtons();
  $('#med-save').textContent='変更を保存';
- $('.medication-form-panel').scrollIntoView({behavior:'smooth',block:'start'});
+ showMedicinePanel('form');
 }
 function renderMedicineList(){
  $$('#med-filters button').forEach(b=>b.classList.toggle('active',b.dataset.filter===medFilter));
@@ -589,7 +605,7 @@ async function saveMedicine(){await action($('#med-save'),async()=>{
  const data={kind:$('#med-kind').value==='supplement'?'supplement':'medicine',name:name.slice(0,80),strength:$('#med-strength').value.trim().slice(0,60),dose,unit:$('#med-unit').value,start,end,institution:$('#med-institution').value.trim().slice(0,120),timings:[timing],timingOther:['時刻指定','一定時間ごと','その他'].includes(timing)?$('#med-timing-other').value.trim().slice(0,120):'',note:$('#med-note').value.trim().slice(0,500),updatedAt:serverTimestamp()};
  await setDoc(medRef(id),data,{merge:true});const old=state.medicines.findIndex(m=>m.id===id);
  const local={...data,id};if(old>=0)state.medicines[old]=local;else state.medicines.push(local);
- resetMedicineForm();renderMedicineList();toast('お薬・サプリ情報を保存しました');
+ closeMedicineForm();toast('お薬・サプリ情報を保存しました');
 });}
 async function removeMedicine(id){
  const m=state.medicines.find(x=>x.id===id);if(!m)return;
@@ -719,14 +735,17 @@ function shiftAnalysisMonth(n){const [y,m]=monthParts(analysisMonth),d=new Date(
 $('#analysis-prev-month').addEventListener('click',()=>action(null,()=>shiftAnalysisMonth(-1)));
 $('#analysis-next-month').addEventListener('click',()=>action(null,()=>shiftAnalysisMonth(1)));
 $('#save-settings').addEventListener('click',saveSettings);
-initMedicineTimings();resetMedicineForm();
+initMedicineTimings();resetMedicineForm();showMedicinePanel('list');
+$('#med-new').addEventListener('click',()=>openNewMedicineForm());
+$('#med-back').addEventListener('click',closeMedicineForm);
+$('#med-cancel').addEventListener('click',closeMedicineForm);
 $('#med-save').addEventListener('click',saveMedicine);
 $('#med-reset').addEventListener('click',()=>resetMedicineForm());
 $('#med-filters').addEventListener('click',e=>{const b=e.target.closest('button[data-filter]');if(!b)return;medFilter=b.dataset.filter;renderMedicineList()});
 $('#med-list').addEventListener('click',e=>{
  const b=e.target.closest('button');if(!b)return;
  if(b.dataset.medEdit)editMedicine(b.dataset.medEdit);
- if(b.dataset.medCopy){const source=state.medicines.find(x=>x.id===b.dataset.medCopy);if(source){resetMedicineForm(source);$('.medication-form-panel').scrollIntoView({behavior:'smooth',block:'start'});toast('新しい履歴として保存します。元の登録の終了日は必要に応じて編集してください')}}
+ if(b.dataset.medCopy){const source=state.medicines.find(x=>x.id===b.dataset.medCopy);if(source){openNewMedicineForm(source);toast('新しい履歴として保存します。元の登録の終了日は必要に応じて編集してください')}}
  if(b.dataset.medDelete)removeMedicine(b.dataset.medDelete);
 });
 // iPhone Safariで幅が崩れるネイティブ日付・年月入力を、同じ幅のカレンダー選択に置換。

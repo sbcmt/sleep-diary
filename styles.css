@@ -489,3 +489,16 @@
     padding:9px clamp(4px,1.8vw,8px);
   }
 }
+
+
+/* v1.2.2 — お薬・サプリ管理：一覧と登録・編集フォームを完全分離 */
+#screen-medicines .med-view[hidden]{display:none!important}
+#screen-medicines .med-list-actions{
+  display:flex;justify-content:flex-end;margin:0 0 12px;
+}
+#screen-medicines .med-form-top{
+  display:flex;justify-content:flex-start;margin:0 0 12px;
+}
+#screen-medicines .med-list-actions .btn,
+#screen-medicines .med-form-top .btn{min-height:44px}
+#screen-medicines .medication-form-panel{margin-top:0}
