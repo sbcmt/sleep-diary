@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.10 (2026-11-03) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.11 (2026-11-03) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -148,7 +148,8 @@ async function loadInitial(){
  state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
  weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';
- await loadMonth(state.month);analysisMonth=state.month;analysisDay=state.selected;analysisWeek='';analysisViewportKey='';
+ await loadMonth(state.month);
+ const today=iso(new Date());analysisMonth=today.slice(0,7);analysisDay=today;analysisWeek=weekStart(today);analysisViewportKey='';
  applyTheme();renderChart();renderInput();renderSettings();await renderAnalysis();
 }
 async function persistDay(key){assertSession();const item=normalDay(key);await setDoc(dayRef(key),{...item,updatedAt:serverTimestamp()});
@@ -222,7 +223,13 @@ function renderChart(){
 }
 async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('年月を正しく指定してください');return}await loadMonth(month);state.month=month;renderChart();await renderAnalysis()}
 async function monthShift(n){const [y,m]=monthParts(state.month),d=new Date(y,m-1+n,1);await jumpMonth(dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7))}
-async function show(tab){if(tab==='report'||tab==='analysis')await loadMonth(state.month);if(tab==='input')await loadMonth(state.selected.slice(0,7));
+async function show(tab){
+ if(tab==='report')await loadMonth(state.month);
+ if(tab==='input')await loadMonth(state.selected.slice(0,7));
+ if(tab==='analysis'){
+  // 分析画面を開くたびに当日・当月・当日を含む日曜始まりの週へ戻す。
+  const today=iso(new Date());analysisDay=today;analysisMonth=today.slice(0,7);analysisWeek=weekStart(today);analysisViewportKey='';
+ }
  $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$$('.screen').forEach(s=>s.classList.toggle('active',s.id===`screen-${tab}`));
  if(tab==='report')renderChart();if(tab==='input')renderInput();if(tab==='settings')renderSettings();if(tab==='medicines'){renderMedicineList();resetMedicineForm()}if(tab==='analysis')await renderAnalysis();window.scrollTo({top:0,behavior:'instant'});
 }
@@ -426,6 +433,7 @@ function svgPlot(data,type){
 }
 async function renderAnalysis(){
  const daily=analysisView==='daily',weekly=analysisView==='weekly';
+ $('#screen-analysis').classList.toggle('analysis-daily',daily);
  if(weekly&&currentUser?.emailVerified)await ensureWeekBounds();
  const weeks=weekly?selectableWeeks():[];
  if(weekly&&!weeks.some(w=>w.key===analysisWeek)){
@@ -474,7 +482,7 @@ async function renderAnalysis(){
   ['期間内の直近体重',latestWeight?latestWeight.value.toFixed(1)+' kg':'—',latestWeight?latestWeight.date+'の記録':'記録なし']
  ];
  const stats=analysisTarget==='sleep'?sleepStats:analysisTarget==='weight'?weightStats:[...sleepStats,...weightStats];
- $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${esc(x[0])}</small><strong>${esc(x[1])}</strong><p>${esc(x[2])}</p></div>`).join('');
+ $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${esc(x[0])}</small><strong>${esc(x[1])}</strong>${daily?'':`<p>${esc(x[2])}</p>`}</div>`).join('');
  $('#analysis-title').textContent=daily?`${dayLabel}の記録`:weekly?'選択した週の日別記録':`${prefix}の日別記録`;
  $('#sleep-graph-panel .analysis-graph-description').textContent='横軸：日付／縦軸：睡眠時間（時間）';
  $('#weight-graph-panel .analysis-graph-description').textContent='横軸：日付／縦軸：体重（kg）';
@@ -495,8 +503,13 @@ async function renderAnalysis(){
   const parts=[];
   if(analysisTarget!=='weight')parts.push(`睡眠：${s.sleepRecorded?fmt(s.s):'未入力'} ／ 休息：${s.sleepRecorded?fmt(s.r):'未入力'}`);
   if(analysisTarget!=='sleep')parts.push(`体重：${selectedDay&&validWeight(selectedDay.weight)!==null?validWeight(selectedDay.weight).toFixed(1)+' kg':'未入力'}`);
-  $('#analysis-bars').innerHTML=`<div class="record-value-only">${esc(parts.join(' ／ '))}</div>`;
+  $('#analysis-daily-summary').textContent=parts.join(' ／ ');
+  $('#analysis-daily-summary').hidden=false;
+  // 同じ日付と数値を下部に重複表示しない。注意書きだけは残す。
+  $('#analysis-bars').innerHTML='';
  }else{
+  $('#analysis-daily-summary').hidden=true;
+  $('#analysis-daily-summary').textContent='';
   $('#analysis-bars').innerHTML=data.map(item=>{
    const value=item.sleepHours;
    const sleepLabel=value===null?'未入力':formatHours(value);
@@ -694,7 +707,10 @@ $('#download-pdf').addEventListener('click',()=>action($('#download-pdf'),downlo
 $$('.mode').forEach(b=>b.addEventListener('click',()=>{selectedMode=b.dataset.mode;renderModes()}));
 $('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(val)){toast('日付を正しく指定してください');e.target.value=state.selected;return}action(null,async()=>{await loadMonth(val.slice(0,7));state.selected=val;state.month=val.slice(0,7);renderInput();renderChart()})});
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
-$$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisView=b.dataset.view;await renderAnalysis()})));
+$$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{
+ if(analysisView!==b.dataset.view){const today=iso(new Date());analysisDay=today;analysisMonth=today.slice(0,7);analysisWeek=weekStart(today);}
+ analysisView=b.dataset.view;await renderAnalysis();
+})));
 $$('#analysis-targets button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisTarget=b.dataset.target;await renderAnalysis()})));
 $('#analysis-month').addEventListener('change',e=>action(e.target,async()=>{if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){toast('年月を確認してください');return}analysisMonth=e.target.value;analysisWeek='';await renderAnalysis()}));
 $('#analysis-week').addEventListener('change',e=>action(null,async()=>{analysisWeek=e.target.value;await renderAnalysis()}));

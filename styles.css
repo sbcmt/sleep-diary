@@ -386,3 +386,20 @@
 #analysis-graphs[hidden]{display:none!important}
 #analysis-day-picker{min-width:168px;max-width:100%;width:auto}
 @media(max-width:480px){.analysis-graph-panel{padding:14px}}
+
+/* v1.0.11: 日次のみ説明文なしのコンパクトなカード。週次・月次の既存表示は維持。 */
+#screen-analysis.analysis-daily #analysis-stats{gap:10px;margin-bottom:12px}
+#screen-analysis.analysis-daily #analysis-stats .statbox{padding:10px 12px;min-width:0}
+#screen-analysis.analysis-daily #analysis-stats .statbox strong{margin-top:3px;line-height:1.25;overflow-wrap:anywhere}
+#screen-analysis.analysis-daily #analysis-stats .statbox small{font-size:12px;line-height:1.35}
+#analysis-daily-summary{margin:-2px 0 12px;padding:9px 12px;font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+#analysis-daily-summary[hidden]{display:none!important}
+#screen-analysis.analysis-daily #analysis-title,
+#screen-analysis.analysis-daily #analysis-bars{display:none!important}
+#screen-analysis.analysis-daily #analysis-details-panel{padding:10px 12px}
+#screen-analysis.analysis-daily #analysis-medical-notice{margin:0;font-size:12px}
+@media(max-width:480px){
+ #screen-analysis.analysis-daily #analysis-stats{gap:9px}
+ #screen-analysis.analysis-daily #analysis-stats .statbox{padding:10px 11px}
+ #screen-analysis.analysis-daily #analysis-stats .statbox strong{font-size:clamp(19px,5vw,24px)}
+}
