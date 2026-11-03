@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.2.0 (2026-11-03) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.11 (2026-11-03) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -144,8 +144,7 @@ async function loadInitial(){
  const [settingsSnap,medsSnap]=await Promise.all([getDoc(userDoc()),getDocs(collection(db,'users',uid,'medications'))]);
  if(uid!==currentUser?.uid)return;
  state.settings={...blankSettings(),...(settingsSnap.exists()?settingsSnap.data():{})};
- // v1.2.0: 月間睡眠表の初期表示は常に端末の当月（保存済みの初期月設定より優先）。
- state.month=iso(new Date()).slice(0,7);
+ if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.settings.firstMonth||''))state.month=state.settings.firstMonth;
  state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
  weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';
@@ -225,12 +224,7 @@ function renderChart(){
 async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('年月を正しく指定してください');return}await loadMonth(month);state.month=month;renderChart();await renderAnalysis()}
 async function monthShift(n){const [y,m]=monthParts(state.month),d=new Date(y,m-1+n,1);await jumpMonth(dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7))}
 async function show(tab){
- if(tab==='report'){
-  // 月間睡眠表を開き直すたびに、当月に戻す。前月・翌月操作はその画面内だけで保持。
-  const currentMonth=iso(new Date()).slice(0,7);
-  await loadMonth(currentMonth);
-  state.month=currentMonth;
- }
+ if(tab==='report')await loadMonth(state.month);
  if(tab==='input')await loadMonth(state.selected.slice(0,7));
  if(tab==='analysis'){
   // 分析画面を開くたびに当日・当月・当日を含む日曜始まりの週へ戻す。
@@ -460,7 +454,7 @@ async function renderAnalysis(){
  if(weekly){
   $('#analysis-week').innerHTML=weeks.map(w=>`<option value="${esc(w.key)}">${esc(w.label)}</option>`).join('');
   $('#analysis-week').value=analysisWeek;
-  $('#analysis-first-record').textContent=earliestRecordDate?`${weekBoundsReliable?'最初の記録日':'確認できた記録の開始日'}：${earliestRecordDate.slice(0,4)}年${earliestRecordDate.slice(5,7)}月${earliestRecordDate.slice(8,10)}日`:'まだ記録がありません';
+  $('#analysis-first-record').textContent='';
  }
  if(currentUser?.emailVerified){const months=[...new Set(days.map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
  const s=sumFor(statDays),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
@@ -468,7 +462,7 @@ async function renderAnalysis(){
  const latestWeight=s.weights.at(-1);
  const prefix=analysisMonth.replace('-','年')+'月';
  const dayLabel=`${analysisDay.slice(0,4)}年${analysisDay.slice(5,7)}月${analysisDay.slice(8,10)}日`;
- $('#analysis-stats-period').textContent=daily?`${dayLabel}の記録`:weekly?`${week?.label||''}の集計（選択した週）`:`${prefix}の集計（選択した月）`;
+ $('#analysis-stats-period').textContent=daily?'':weekly?`${week?.label||''}の集計（選択した週）`:`${prefix}の集計（選択した月）`;
  const selectedDay=daily?state.days[analysisDay]:null;
  const sleepStats=daily?[
   ['記録した睡眠',s.sleepRecorded?fmt(s.s):'—','選択した日の熟睡時間'],

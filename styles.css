@@ -405,42 +405,36 @@
 }
 
 
-/* v1.2.0: 日次・週次・月次で、期間／表示対象の位置を週次と同じ2列に固定。 */
-#screen-analysis .analysis-controls{
- display:flex;
- flex-direction:column;
- align-items:stretch;
- gap:14px;
+/* v1.2.0: 分析画面の選択コントロール高さ統一と不要文言の整理 */
+#analysis-day-picker,
+#analysis-week,
+.analysis-month-control input,
+.analysis-month-control .btn.small{
+  min-height:44px;
+  height:44px;
+  box-sizing:border-box;
 }
-#screen-analysis .analysis-selector-row{
- display:flex;
- flex-direction:column;
- align-items:flex-start;
- min-width:0;
+
+.analysis-month-control .btn.small{
+  min-width:44px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
 }
-#screen-analysis .analysis-switch-row{
- display:grid;
- grid-template-columns:max-content max-content;
- align-items:start;
- gap:12px;
- max-width:100%;
- min-width:0;
+
+#analysis-day-picker{
+  width:100%;
 }
-#screen-analysis .analysis-switch-row .analysis-control-group{
- min-width:0;
+
+#analysis-week{
+  padding:10px 11px;
 }
-#screen-analysis .analysis-switch-row .analysis-tabs{
- flex-wrap:nowrap;
+
+#analysis-first-record{
+  display:none !important;
 }
-@media(max-width:480px){
- #screen-analysis .analysis-switch-row{gap:8px}
- #screen-analysis .analysis-switch-row .analysis-tabs{gap:4px}
- #screen-analysis .analysis-switch-row .analysis-tabs button{
-  font-size:clamp(11px,3.1vw,14px);
-  padding:8px 8px;
- }
-}
-@media(max-width:380px){
- #screen-analysis .analysis-switch-row .analysis-tabs{gap:3px}
- #screen-analysis .analysis-switch-row .analysis-tabs button{padding-inline:6px}
+
+#screen-analysis.analysis-daily #analysis-stats-period{
+  display:none !important;
 }
