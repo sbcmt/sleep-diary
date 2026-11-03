@@ -441,7 +441,7 @@ function resetMedicineForm(copy=null){
  $('#med-kind').value=copy?.kind||'medicine';$('#med-name').value=copy?.name||'';
  $('#med-strength').value=copy?.strength||'';$('#med-dose').value=String(copy?.dose||1);
  $('#med-unit').value=['錠','包','カプセル','その他'].includes(copy?.unit)?copy.unit:'錠';
- $('#med-start').value=copy?iso(new Date()):iso(new Date());$('#med-end').value='';
+ $('#med-start').value=iso(new Date());$('#med-end').value='';updateDatePickerButtons();
  $('#med-institution').value=copy?.institution||'';$('#med-note').value=copy?.note||'';
  const timing=Array.isArray(copy?.timings)?copy.timings[0]||'':copy?.timing||'';
  $('#med-timings').value=medicineTimings.includes(timing)?timing:'';
@@ -452,7 +452,7 @@ function resetMedicineForm(copy=null){
 function editMedicine(id){
  const m=state.medicines.find(x=>x.id===id);if(!m)return;
  resetMedicineForm(m);$('#med-edit-id').value=m.id;$('#med-form-title').textContent='登録内容を編集';
- $('#med-start').value=m.start||iso(new Date());$('#med-end').value=m.end||'';
+ $('#med-start').value=m.start||iso(new Date());$('#med-end').value=m.end||'';updateDatePickerButtons();
  $('#med-save').textContent='変更を保存';
  $('.medication-form-panel').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -627,6 +627,10 @@ function updateDatePickerButtons(){
  const first=$('#first-month').value||'';
  $('#entry-date-text').textContent=/^\d{4}-\d{2}-\d{2}$/.test(day)?day.replaceAll('-','/'):'日付を選ぶ';
  $('#first-month-text').textContent=/^\d{4}-\d{2}$/.test(first)?first.replace('-','年')+'月':'指定しない';
+ for(const kind of ['med-start','med-end']){
+  const value=$('#'+kind).value||'';
+  $('#'+kind+'-text').textContent=/^\d{4}-\d{2}-\d{2}$/.test(value)?value.replaceAll('-','/'):kind==='med-start'?'日付を選ぶ':'指定しない';
+ }
 }
 function clampPickerDay(){pickerDay=Math.max(1,Math.min(pickerDay,new Date(pickerYear,pickerMonth,0).getDate()))}
 function pickerStep(n){
@@ -642,7 +646,7 @@ function renderDatePicker(){
  const monthOnly=pickerKind==='month';
  $('#picker-day-area').hidden=monthOnly;
  $('#picker-today').hidden=monthOnly;
- $('#picker-clear').hidden=!monthOnly;
+ $('#picker-clear').hidden=!(monthOnly||pickerKind==='med-end');
  $('#picker-confirm').textContent=monthOnly?'この月を選ぶ':'この日を選ぶ';
  if(monthOnly)return;
  const weekday=new Date(pickerYear,pickerMonth-1,1).getDay();
@@ -657,19 +661,19 @@ function renderDatePicker(){
 }
 function openDatePicker(kind){
  pickerKind=kind;
- let value=kind==='day'?$('#entry-date').value:$('#first-month').value;
+ let value=kind==='day'?$('#entry-date').value:kind==='month'?$('#first-month').value:$('#'+kind).value;
  if(!/^\d{4}-\d{2}/.test(value))value=iso(new Date());
  const chunks=value.split('-').map(Number);
  pickerYear=Math.max(1900,Math.min(2100,chunks[0]));
  pickerMonth=Math.max(1,Math.min(12,chunks[1]||1));
  pickerDay=chunks[2]||1;
  clampPickerDay();
- $('#date-picker-title').textContent=kind==='day'?'記録する日付':'最初に表示する月';
+ $('#date-picker-title').textContent=({day:'記録する日付',month:'最初に表示する月','med-start':'服用開始日','med-end':'服用終了日'})[kind]||'日付を選ぶ';
  renderDatePicker();$('#date-picker-dialog').showModal();
 }
 function applyDatePicker(clear=false){
- const field=pickerKind==='day'?$('#entry-date'):$('#first-month');
- field.value=clear?'':(pickerKind==='day'?dateString(pickerYear,pickerMonth,pickerDay):`${pickerYear}-${pad2(pickerMonth)}`);
+ const field=pickerKind==='day'?$('#entry-date'):pickerKind==='month'?$('#first-month'):$('#'+pickerKind);
+ field.value=clear?'':(pickerKind==='month'?`${pickerYear}-${pad2(pickerMonth)}`:dateString(pickerYear,pickerMonth,pickerDay));
  $('#date-picker-dialog').close();
  updateDatePickerButtons();
  // 既存のFirestoreデータ再取得処理に連携。設定側は「設定を保存」で確定。
@@ -677,6 +681,8 @@ function applyDatePicker(clear=false){
 }
 $('#entry-date-picker').addEventListener('click',()=>openDatePicker('day'));
 $('#first-month-picker').addEventListener('click',()=>openDatePicker('month'));
+$('#med-start-picker').addEventListener('click',()=>openDatePicker('med-start'));
+$('#med-end-picker').addEventListener('click',()=>openDatePicker('med-end'));
 $('#date-picker-close').addEventListener('click',()=>$('#date-picker-dialog').close());
 $('#picker-year').innerHTML=Array.from({length:201},(_,i)=>`<option value="${i+1900}">${i+1900}年</option>`).join('');
 $('#picker-month').innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}月</option>`).join('');
@@ -686,7 +692,7 @@ $('#picker-prev').addEventListener('click',()=>pickerStep(-1));
 $('#picker-next').addEventListener('click',()=>pickerStep(1));
 $('#picker-days').addEventListener('click',e=>{const b=e.target.closest('button[data-day]');if(!b)return;pickerDay=Number(b.dataset.day);renderDatePicker()});
 $('#picker-today').addEventListener('click',()=>{const now=new Date();pickerYear=now.getFullYear();pickerMonth=now.getMonth()+1;pickerDay=now.getDate();renderDatePicker()});
-$('#picker-clear').addEventListener('click',()=>{if(pickerKind==='month')applyDatePicker(true)});
+$('#picker-clear').addEventListener('click',()=>{if(pickerKind==='month'||pickerKind==='med-end')applyDatePicker(true)});
 $('#picker-confirm').addEventListener('click',()=>applyDatePicker());
 $('#date-picker-dialog').addEventListener('click',e=>{if(e.target.id==='date-picker-dialog')e.target.close()});
 

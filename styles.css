@@ -297,44 +297,71 @@
 
 .auth-policy-link{font-size:13px;text-align:center;margin:16px 0 0}.auth-policy-link a,.disclosure a{color:#326b50;text-underline-offset:3px}
 
-/* Ver.1.0.8: 月間表はスクロールしても日付欄の背面が透けない */
+/* Ver.1.0.8: 横スクロール時に記録が固定日付欄へ透けない */
 @media screen {
- .sleep-table tbody tr:nth-child(odd) td:not(.slot.sleep):not(.slot.rest){background-color:#ffffff!important}
- .sleep-table tbody tr:nth-child(even) td:not(.slot.sleep):not(.slot.rest){background-color:#f3f7fc!important}
- .sleep-table tbody tr:nth-child(odd) td.slot.rest{background:#fff!important}
- .sleep-table tbody tr:nth-child(even) td.slot.rest{background:#f3f7fc!important}
- .sleep-table tbody tr td.slot.sleep{background:var(--sleep)!important}
- .sleep-table tbody tr td.date-cell{position:sticky!important;left:0!important;z-index:12!important;isolation:isolate;background-clip:padding-box;box-shadow:2px 0 0 #c6d0dc}
- .sleep-table thead th.date-cell{position:sticky!important;left:0!important;z-index:20!important;background:#eef2f7!important}
- .sleep-table tbody tr td.slot,.sleep-table tbody tr td.extra,.sleep-table tbody tr td.weight-cell,.sleep-table tbody tr td.event-cell{position:relative;z-index:0}
+ .sleep-table tbody tr:nth-child(odd) td{background-color:#fff}
+ .sleep-table tbody tr:nth-child(even) td{background-color:#f3f7fc}
+ .sleep-table tbody td.date-cell{position:sticky;left:0;z-index:6;background-clip:padding-box;opacity:1}
+ .sleep-table tbody tr:nth-child(odd) td.date-cell{background:#fff!important}
+ .sleep-table tbody tr:nth-child(even) td.date-cell{background:#eef3fa!important}
+ .sleep-table tbody tr td.date-cell.sunday{color:#ba3344!important}
+ .sleep-table tbody tr td.date-cell.saturday{color:#2c5fa8!important}
+ .sleep-table thead th.date-cell{position:sticky;left:0;z-index:8;background:#eef2f7}
+ .sleep-table .slot.sleep{background-color:var(--sleep)!important}
+ .sleep-table .slot.rest{background-color:#fff!important}
 }
-.sleep-table .date-cell.sunday{color:#bb3448!important}
-.sleep-table .date-cell.saturday{color:#315b9c!important}
+@media print {
+ .sleep-table tbody tr td.date-cell.sunday{color:#ba3344!important}
+ .sleep-table tbody tr td.date-cell.saturday{color:#2c5fa8!important}
+ .sleep-table tbody tr:nth-child(odd) td.date-cell{background:#fff!important}
+ .sleep-table tbody tr:nth-child(even) td.date-cell{background:#eef3fa!important}
+}
+/* 独立したお薬・サプリ管理 */
+.med-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
+.med-form-grid .full{grid-column:1/-1}
+.med-timing-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.med-timing-group{border:1px solid var(--border);border-radius:9px;padding:9px 10px;min-width:0;display:flex;flex-direction:column;gap:7px}
+.med-timing-group legend{font-size:12px;font-weight:800;color:var(--accent)}
+.med-timing-group label{font-size:12px;display:flex;align-items:center;gap:6px;line-height:1.4}
+.med-timing-group input{width:16px;height:16px;flex:none;accent-color:var(--accent)}
+.med-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.med-list-head h2{margin-bottom:0}
+.med-list-head .analysis-tabs{margin:0 0 10px}
+.med-records{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.med-record{border:1px solid var(--border);border-radius:10px;padding:14px;min-width:0;background:#fff}
+.med-record-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.med-record p{font-size:12px;color:#566780;margin:6px 0;overflow-wrap:anywhere}
+.med-record .actions{margin-top:12px}
+.med-type{background:var(--soft);border-radius:30px;color:var(--accent);font-size:11px;padding:3px 9px}
+.analysis-month-control{display:flex;gap:7px;align-items:center}
+.analysis-month-control input{width:170px;max-width:100%;min-height:39px;border:1px solid var(--border);border-radius:8px;background:#fff;padding:6px 8px;color:var(--ink)}
+@media(max-width:550px){.med-form-grid{grid-template-columns:1fr}.med-timing-groups{grid-template-columns:1fr 1fr}.analysis-month-control input{font-size:16px}}
+@media(max-width:380px){.med-timing-groups{grid-template-columns:1fr}}
+@media print{#screen-medicines{display:none!important}}
 
-/* お薬・サプリ管理 */
-.med-management-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
-.med-management-grid>.panel{min-width:0;margin:0}
-.med-form-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
-.med-form-two>.field{min-width:0}
-.med-form-two input,.med-form-two select,.med-management-grid input,.med-management-grid select,.med-management-grid textarea{min-width:0;max-width:100%;font-size:16px}
-.med-timing-group{border:1px solid var(--border);border-radius:9px;margin:0 0 10px;padding:10px}
-.med-timing-group legend{font-size:12px;font-weight:750;color:var(--ink);padding:0 5px}
-.med-timing-group>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.med-timing-choice{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:7px;padding:8px 9px;min-width:0;background:#fff;cursor:pointer}
-.med-timing-choice input{width:17px;height:17px;flex:0 0 auto;accent-color:var(--accent)}
-.med-timing-choice span{font-size:13px;white-space:nowrap}
-.med-list-tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
-.med-list-tabs .active{border-color:var(--accent);background:var(--soft);color:var(--accent)}
-.med-date-group{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;background:#fff}
-.med-date-group h3{font-size:14px;background:var(--soft);margin:0;padding:12px 14px;color:var(--ink)}
-.med-record{padding:12px 14px;border-top:1px solid var(--border)}
-.med-info{display:grid;gap:3px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
-.med-info strong{font-size:15px}
-.med-extra-note{white-space:pre-wrap;color:#5b6c81}
-.med-record-buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-.med-empty,.med-assist{font-size:13px;color:#66758b}
-.analysis-month-row{display:flex;align-items:center;gap:7px;max-width:100%;min-width:0}
-.analysis-month-row input{min-width:0;width:160px;max-width:100%;height:38px;padding:6px 9px;background:white;border:1px solid var(--border);border-radius:8px;color:var(--ink);font-size:16px}
-@media(max-width:850px){.med-management-grid{grid-template-columns:minmax(0,1fr)}.med-form-two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
-@media(max-width:370px){.med-form-two{grid-template-columns:minmax(0,1fr)}.med-timing-group>div{grid-template-columns:minmax(0,1fr)}}
-@media print{.sleep-table tbody tr td.date-cell{color:inherit}.sleep-table tbody tr td.date-cell.sunday{color:#bb3448!important}.sleep-table tbody tr td.date-cell.saturday{color:#315b9c!important}}
+/* v1.0.8: iPhoneでも開始日・終了日を1行に配置。ネイティブdateの横幅膨張を回避する。 */
+.med-date-row{
+ grid-column:1 / -1;
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:8px;
+ min-width:0;
+ max-width:100%;
+ width:100%;
+}
+.med-date-row > .field{min-width:0;min-inline-size:0;max-width:100%;width:100%}
+.med-date-row .date-picker-trigger{
+ width:100%;min-width:0;min-inline-size:0;max-width:100%;
+ box-sizing:border-box;gap:5px;padding:9px 8px;
+ overflow:hidden;
+}
+.med-date-row .date-picker-trigger .picker-button-value{
+ min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ font-size:clamp(13px,3.7vw,16px);font-variant-numeric:tabular-nums;
+}
+.med-date-row .picker-button-symbol{font-size:15px;flex-shrink:0}
+@media(max-width:350px){
+ .med-date-row{gap:6px}
+ .med-date-row .date-picker-trigger{padding-inline:5px}
+ .med-date-row .picker-button-symbol{display:none}
+}

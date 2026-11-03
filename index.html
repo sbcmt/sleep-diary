@@ -27,7 +27,7 @@
 <meta name="apple-mobile-web-app-title" content="睡眠日誌"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 
-<link href="styles.css?v=1.0.8" rel="stylesheet"/></head>
+<link href="styles.css?v=1.0.8-daterow" rel="stylesheet"/></head>
 <body>
 <header class="topbar"><div class="topinner"><div><div class="brand"><img src="assets/sleep-diary-logo.png?v=1.0.7" class="brand-logo" alt="睡眠日誌" width="168" height="56"/></div></div><div style="display:flex;gap:8px;align-items:center"><button class="btn small site-hidden" id="logout-button">ログアウト</button></div></div></header><section class="auth-wrap site-hidden" id="auth-view"><div class="auth-card"><h1>睡眠日誌にログイン</h1><div class="auth-grid"><label for="auth-email">メールアドレス</label><input autocomplete="username" id="auth-email" placeholder="example@example.com" required="" type="email"/><label for="auth-password">パスワード（6文字以上）</label><input autocomplete="current-password" id="auth-password" minlength="6" placeholder="パスワード" required="" type="password"/></div><div class="auth-btns"><button class="btn primary" id="login-button">ログイン</button><button class="btn" id="register-button">新規登録</button></div><div class="auth-btns"><button class="btn" id="reset-password-button">パスワードを忘れた場合</button></div><div id="auth-notice" role="status"></div><p class="auth-policy-link"><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></p></div></section><section class="verify-view site-hidden" id="verify-view"><h2>メールアドレスの確認が必要です</h2><p>メールに届いた確認リンクを開いてください。認証完了後、自動的に月間睡眠表へ進みます。</p><p class="account-email" id="verify-email-value"></p><div class="actions"><span class="verify-status" id="verify-status" role="status">メール認証を確認しています…</span><button class="btn" id="resend-verified">確認メールを再送信</button><button class="btn" id="verify-logout">ログアウト</button></div><p class="muted">メールが届かない場合は迷惑メールフォルダーもご確認ください。</p></section><div id="loading-screen">ログイン状態を確認しています…</div>
 <div class="shell site-hidden" id="app-view">
@@ -72,8 +72,10 @@
    <div class="field"><label for="med-strength">規格・含有量（任意）</label><input id="med-strength" type="text" maxlength="60" placeholder="例：10mg"></div>
    <div class="field"><label for="med-dose">1回量</label><select id="med-dose"><option value="0.5">半（0.5）</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></div>
    <div class="field"><label for="med-unit">単位</label><select id="med-unit"><option>錠</option><option>包</option><option>カプセル</option><option>その他</option></select></div>
-   <div class="field"><label for="med-start">服用開始日（必須）</label><input id="med-start" type="date" required></div>
-   <div class="field"><label for="med-end">服用終了日（任意）</label><input id="med-end" type="date"></div>
+   <div class="med-date-row">
+    <div class="field"><label for="med-start-picker">服用開始日（必須）</label><input id="med-start" type="hidden"><button id="med-start-picker" class="date-picker-trigger" type="button" aria-haspopup="dialog" aria-controls="date-picker-dialog"><span class="picker-button-value" id="med-start-text">日付を選ぶ</span><span aria-hidden="true" class="picker-button-symbol">▦</span></button></div>
+    <div class="field"><label for="med-end-picker">服用終了日（任意）</label><input id="med-end" type="hidden"><button id="med-end-picker" class="date-picker-trigger" type="button" aria-haspopup="dialog" aria-controls="date-picker-dialog"><span class="picker-button-value" id="med-end-text">指定しない</span><span aria-hidden="true" class="picker-button-symbol">▦</span></button></div>
+   </div>
    <div class="field"><label for="med-institution">医療機関・薬局（任意）</label><input id="med-institution" type="text" maxlength="120"></div>
    <div class="field full"><label for="med-timings">服用タイミング（1つ選択）</label><select id="med-timings" required></select></div>
    <div class="field full" id="med-timing-other-field" style="display:none"><label for="med-timing-other">選択したタイミングの詳細（任意）</label><input id="med-timing-other" type="text" maxlength="120" placeholder="例：午後3時、6時間ごと"></div>
@@ -97,5 +99,5 @@
 <footer class="appfooter no-print">© 2021–2026 Dobhar-chú</footer>
 </div><div class="toaster" id="toast" role="status"></div>
 
-<script src="app.js?v=1.0.8-r2" type="module"></script></body>
+<script src="app.js?v=1.0.8-r3" type="module"></script></body>
 </html>
