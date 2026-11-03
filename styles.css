@@ -502,3 +502,86 @@
 #screen-medicines .med-list-actions .btn,
 #screen-medicines .med-form-top .btn{min-height:44px}
 #screen-medicines .medication-form-panel{margin-top:0}
+
+
+/* v1.2.3 — 医療機関・服用期間ごとに処方をまとめて表示 */
+#screen-medicines .med-records{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+#screen-medicines .med-prescription,
+#screen-medicines .med-supplement-group{
+  min-width:0;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
+}
+#screen-medicines .med-prescription-heading{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:space-between;
+  padding:13px 15px 5px;
+  color:var(--ink);
+  font-size:16px;
+}
+#screen-medicines .med-prescription-count{
+  font-size:11px;
+  font-weight:700;
+  color:var(--accent);
+  background:var(--soft);
+  border-radius:99px;
+  padding:3px 8px;
+  white-space:nowrap;
+}
+#screen-medicines .med-prescription-dates{
+  margin:0;
+  padding:0 15px 12px;
+  font-size:12px;
+  color:#677991;
+  border-bottom:1px solid var(--border);
+}
+#screen-medicines .med-entry{
+  min-width:0;
+  padding:12px 15px;
+}
+#screen-medicines .med-entry + .med-entry{
+  border-top:1px solid var(--border);
+}
+#screen-medicines .med-entry:nth-child(even){
+  background:#f8fafd;
+}
+#screen-medicines .med-entry p{
+  font-size:12px;
+  color:#566780;
+  margin:5px 0;
+  overflow-wrap:anywhere;
+}
+#screen-medicines .med-entry .actions{
+  margin-top:10px;
+}
+#screen-medicines .med-supplement-group h3{
+  font-size:16px;
+  margin:0;
+  padding:13px 15px;
+  border-bottom:1px solid var(--border);
+}
+#screen-medicines .med-supplement-entry + .med-supplement-entry{
+  border-top:1px solid var(--border);
+}
+#screen-medicines .med-supplement-dates{
+  margin:0;
+  padding:10px 15px 0;
+  font-size:12px;
+  color:#677991;
+}
+@media screen and (max-width:480px){
+  #screen-medicines .med-entry,
+  #screen-medicines .med-prescription-heading{padding-inline:12px}
+  #screen-medicines .med-prescription-dates{padding-inline:12px}
+  #screen-medicines .med-entry .actions{gap:6px}
+  #screen-medicines .med-entry .actions .btn.small{padding:6px 9px}
+}

@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.2.2 (2026-11-03) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.3 (2026-11-04) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -584,20 +584,72 @@ function editMedicine(id){
  $('#med-save').textContent='変更を保存';
  showMedicinePanel('form');
 }
-function renderMedicineList(){
- $$('#med-filters button').forEach(b=>b.classList.toggle('active',b.dataset.filter===medFilter));
- const items=state.medicines.filter(m=>(medFilter==='active')===medIsActive(m)).sort((a,b)=>(b.start||'').localeCompare(a.start||'')||a.name.localeCompare(b.name,'ja'));
- $('#med-list').innerHTML=items.length?items.map(m=>`<article class="med-record">
+// v1.2.3 — 処方期間と医療機関でまとめ、朝から就寝前・頓服の順に表示する。
+// 元のFirestoreの記録は変更せず、一覧の見せ方だけを変える。
+function medTimingList(m){
+ return (Array.isArray(m.timings)?m.timings:[m.timing]).filter(Boolean);
+}
+function medTimingOrder(m){
+ const ranks={
+  '起床時':0,'毎食前':10,'朝食前':11,'毎食直前':12,'朝食直前':13,
+  '毎食後':19,'朝食後':20,'朝食直後':21,'毎食直後':22,
+  '朝昼の間':25,'昼食前':30,'昼食直前':31,'昼食後':40,'昼食直後':41,
+  '毎食間':44,'昼夕の間':45,'夕食前':50,'夕食直前':51,
+  '夕食後':60,'夕食直後':61,'一定時間ごと':80,'就寝前':90,'その他':95,
+  '頓服（必要なとき）':999,'頓服':999
+ };
+ return Math.min(...medTimingList(m).map(t=>{
+  if(t==='時刻指定'){
+   const match=String(m.timingOther||'').match(/(?:^|[^\d])(\d{1,2})[:：時](\d{1,2})?/);
+   if(match){const hour=Number(match[1]),minute=Number(match[2]||0);if(hour<24&&minute<60)return Math.min(94,Math.max(1,(hour+minute/60)*3.8));}
+   return 85;
+  }
+  return ranks[t]??95;
+ }),999);
+}
+function compareMedicineTiming(a,b){
+ return medTimingOrder(a)-medTimingOrder(b)||(a.name||'').localeCompare(b.name||'','ja');
+}
+function medicineEntryHtml(m){
+ const timing=medTimingList(m).join('・');
+ return `<div class="med-entry">
   <div class="med-record-top"><strong>${esc(m.name||'名称未設定')}</strong><span class="med-type">${m.kind==='supplement'?'サプリ':'お薬'}</span></div>
   <p>${m.strength?esc(m.strength)+' ／ ':''}1回 ${esc(medDisplayDose(m))}</p>
-  <p>服用開始日：${esc(m.start||'未設定')}${m.end?' ／ 終了日：'+esc(m.end):''}</p>
-  ${(Array.isArray(m.timings)?m.timings[0]:m.timing)?`<p>タイミング：${esc(Array.isArray(m.timings)?m.timings[0]:m.timing)}</p>`:''}
-  ${m.timingOther?`<p>その他：${esc(m.timingOther)}</p>`:''}
-  ${m.institution?`<p>医療機関・薬局：${esc(m.institution)}</p>`:''}
+  ${timing?`<p>タイミング：${esc(timing)}</p>`:''}
+  ${m.timingOther?`<p>詳細：${esc(m.timingOther)}</p>`:''}
   ${m.note?`<p>メモ：${esc(m.note)}</p>`:''}
   <div class="actions"><button type="button" class="btn small" data-med-edit="${esc(m.id)}">編集</button><button type="button" class="btn small" data-med-copy="${esc(m.id)}">変更内容を新規登録</button><button type="button" class="btn small danger" data-med-delete="${esc(m.id)}">削除</button></div>
- </article>`).join(''):'<p class="muted">この一覧に登録はありません。</p>';
+ </div>`;
 }
+function renderMedicineList(){
+ $$('#med-filters button').forEach(b=>b.classList.toggle('active',b.dataset.filter===medFilter));
+ const items=state.medicines.filter(m=>(medFilter==='active')===medIsActive(m));
+ const groups=new Map(),supplements=[];
+ for(const m of items){
+  if(m.kind==='supplement'){supplements.push(m);continue}
+  // 医療機関が未登録の場合、別の処方と同一だと判断できないため個別に表示。
+  const institution=String(m.institution||'').trim().replace(/[\s\u3000]+/g,' ');
+  const key=institution?JSON.stringify([m.start||'',m.end||'',institution]):`unassigned:${m.id}`;
+  if(!groups.has(key))groups.set(key,{start:m.start||'',end:m.end||'',institution:institution||'医療機関未登録',meds:[]});
+  groups.get(key).meds.push(m);
+ }
+ const ordered=[...groups.values()].sort((a,b)=>b.start.localeCompare(a.start)||b.end.localeCompare(a.end)||a.institution.localeCompare(b.institution,'ja'));
+ const cards=ordered.map(g=>{
+  const period=`${g.start||'未設定'} ～ ${g.end||'継続中'}`;
+  return `<section class="med-prescription" aria-label="${esc(g.institution)}・${esc(period)}">
+   <div class="med-prescription-heading"><strong>${esc(g.institution)}</strong><span class="med-prescription-count">お薬 ${g.meds.length}件</span></div>
+   <p class="med-prescription-dates">服用期間：${esc(period)}</p>
+   <div class="med-prescription-entries">${g.meds.sort(compareMedicineTiming).map(medicineEntryHtml).join('')}</div>
+  </section>`;
+ });
+ if(supplements.length){
+  const supplementsHtml=supplements.sort((a,b)=>(b.start||'').localeCompare(a.start||'')||compareMedicineTiming(a,b))
+   .map(m=>`<article class="med-supplement-entry"><p class="med-supplement-dates">服用期間：${esc(m.start||'未設定')} ～ ${esc(m.end||'継続中')}</p>${medicineEntryHtml(m)}</article>`).join('');
+  cards.push(`<section class="med-supplement-group"><h3>サプリ</h3><div class="med-supplement-entries">${supplementsHtml}</div></section>`);
+ }
+ $('#med-list').innerHTML=cards.length?cards.join(''):'<p class="muted">この一覧に登録はありません。</p>';
+}
+
 async function saveMedicine(){await action($('#med-save'),async()=>{
  const name=$('#med-name').value.trim(),start=$('#med-start').value,end=$('#med-end').value;
  if(!name){toast('薬・サプリの名称を入力してください');return}
