@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.11 (2026-11-03) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.0 (2026-11-03) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -144,7 +144,8 @@ async function loadInitial(){
  const [settingsSnap,medsSnap]=await Promise.all([getDoc(userDoc()),getDocs(collection(db,'users',uid,'medications'))]);
  if(uid!==currentUser?.uid)return;
  state.settings={...blankSettings(),...(settingsSnap.exists()?settingsSnap.data():{})};
- if(/^\d{4}-(0[1-9]|1[0-2])$/.test(state.settings.firstMonth||''))state.month=state.settings.firstMonth;
+ // v1.2.0: 月間睡眠表の初期表示は常に端末の当月（保存済みの初期月設定より優先）。
+ state.month=iso(new Date()).slice(0,7);
  state.medicines=medsSnap.docs.map(d=>({id:d.id,...d.data()}));
  state.days={};state.loadedMonths.clear();
  weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';
@@ -224,7 +225,12 @@ function renderChart(){
 async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('年月を正しく指定してください');return}await loadMonth(month);state.month=month;renderChart();await renderAnalysis()}
 async function monthShift(n){const [y,m]=monthParts(state.month),d=new Date(y,m-1+n,1);await jumpMonth(dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7))}
 async function show(tab){
- if(tab==='report')await loadMonth(state.month);
+ if(tab==='report'){
+  // 月間睡眠表を開き直すたびに、当月に戻す。前月・翌月操作はその画面内だけで保持。
+  const currentMonth=iso(new Date()).slice(0,7);
+  await loadMonth(currentMonth);
+  state.month=currentMonth;
+ }
  if(tab==='input')await loadMonth(state.selected.slice(0,7));
  if(tab==='analysis'){
   // 分析画面を開くたびに当日・当月・当日を含む日曜始まりの週へ戻す。
