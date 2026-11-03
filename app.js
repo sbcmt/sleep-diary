@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.0.5 (2026-11-02) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.0.7 (2026-11-02) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -57,7 +57,7 @@ function medicationName(marker){return state.medicines.find(m=>m.id===marker.med
 function medicationDetail(marker){return `${medicationName(marker)}・${tabletsLabel(marker.tablets)}`}
 
 const state={month:iso(new Date()).slice(0,7),selected:iso(new Date()),settings:blankSettings(),days:{},medicines:[],loadedMonths:new Set()};
-let selectedMode='sleep',analysisView='daily',currentUser=null, sessionEpoch=0, deletedMedicineIds=new Set(), busy=false, verifyTimer=null, checkingVerification=false;
+let selectedMode='sleep',analysisView='daily',analysisTarget='both',currentUser=null, sessionEpoch=0, deletedMedicineIds=new Set(), busy=false, verifyTimer=null, checkingVerification=false;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>el.classList.remove('show'),3600)}
 function notice(msg){$('#auth-notice').textContent=msg;$('#auth-notice').classList.add('show')}
@@ -157,7 +157,7 @@ async function reloadEmailStatus(){if(!currentUser)return;await action($('#send-
 
 function applyTheme(){const t=themes[state.settings.theme]||themes.blue;for(const [key,val] of Object.entries({'--accent':t.accent,'--soft':t.soft,'--sleep':t.sleep,'--rest':t.rest}))document.documentElement.style.setProperty(key,val)}
 function isHabit(i){let b=idx(state.settings.habitBed),w=idx(state.settings.habitWake);return b===w?false:b<w?i>=b&&i<w:i>=b||i<w}
-function markerSVG(type){const paths={med:'<circle cx="10" cy="10" r="7.1"/><circle cx="10" cy="10" r="3.3"/>',bed:'<path d="M10 3 L17 16 H3 Z"/>',wake:'<path d="M3 4 H17 L10 17 Z"/>',meal:'<rect x="3" y="3" width="14" height="14"/>'};const names={med:'服薬',bed:'就寝',wake:'起床',meal:'食事'};return paths[type]?`<svg class="marker-icon" viewBox="0 0 20 20" role="img" aria-label="${names[type]}">${paths[type]}</svg>`:''}
+function markerSVG(type){const paths={med:'<circle cx="10" cy="10" r="7.1"/><circle cx="10" cy="10" r="3.3"/>',bed:'<path d="M3 4 H17 L10 17 Z"/>',wake:'<path d="M10 3 L17 16 H3 Z"/>',meal:'<rect x="3" y="3" width="14" height="14"/>'};const names={med:'服薬',bed:'就寝',wake:'起床',meal:'食事'};return paths[type]?`<svg class="marker-icon" viewBox="0 0 20 20" role="img" aria-label="${names[type]}">${paths[type]}</svg>`:''}
 function printPattern(kind){
  if(kind==='sleep')return '<svg class="print-glyph" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="100" height="100" fill="var(--sleep)"/></svg>';
  if(kind==='rest')return '<svg class="print-glyph rest-glyph" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M9 91 L91 9" stroke="#27313d" stroke-width="14" stroke-linecap="butt" fill="none"/></svg>';
@@ -179,7 +179,7 @@ function renderChart(){
   const date=dateString(y,m,d),a=state.days[date]||freshDay(),wd=weekday(y,m,d),cl=wd==='日'?'sunday':wd==='土'?'saturday':'';
   body+=`<tr class="selectday" data-date="${date}"><td class="date-cell ${cl}">${d}（${wd}）</td>`;
   for(let i=0;i<48;i++){
-   const kind=['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:'',matches=(a.markers||[]).filter(x=>x.slot===i),mark=matches.map(x=>markerSVG(x.type)).join(''),details=matches.map(x=>x.type==='med'?`◎ 服薬（${medicationDetail(x)}）`:{bed:'△ 就寝',wake:'▽ 起床',meal:'□ 食事'}[x.type]).filter(Boolean).join('、');
+   const kind=['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:'',matches=(a.markers||[]).filter(x=>x.slot===i),mark=matches.map(x=>markerSVG(x.type)).join(''),details=matches.map(x=>x.type==='med'?`◎ 服薬（${medicationDetail(x)}）`:{bed:'▽ 就寝',wake:'△ 起床',meal:'□ 食事'}[x.type]).filter(Boolean).join('、');
    body+=`<td class="slot ${kind} ${i%2?'hour-end':''}" title="${date} ${time(i)}${kind?' '+(kind==='sleep'?'熟睡':'休息'):''}${details?' '+esc(details):''}">${printPattern(kind)}<span class="markers">${mark}</span></td>`;
   }
   body+=`<td class="extra">${esc(a.wakeSleepiness||'')}</td><td class="extra">${esc(a.daySleepiness||'')}</td><td class="weight-cell">${validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1)}</td><td class="event-cell" title="${esc(a.note||'')}">${esc(a.note||'')}</td></tr>`;
@@ -202,7 +202,7 @@ function renderModes(){
  $('#entry-time-row').classList.toggle('single-time',single);
  $('#entry-start-label').textContent=single?'時刻':'開始時刻';
  $('#entry-end').disabled=single;
- $('#entry-help').textContent=single?'指定した時刻に記号を付けます。':selectedMode==='erase'?'選択した範囲の熟睡・休息・◎服薬・△就寝・▽起床・□食事を消去します。同じ時刻なら30分枠を消去します。':'開始から終了まで記録します。翌日にまたがる指定もできます。';
+ $('#entry-help').textContent=single?'指定した時刻に記号を付けます。':selectedMode==='erase'?'選択した範囲の熟睡・休息・◎服薬・▽就寝・△起床・□食事を消去します。同じ時刻なら30分枠を消去します。':'開始から終了まで記録します。翌日にまたがる指定もできます。';
 }
 function renderSleepiness(el,key){const d=dayData(state.selected);$(el).innerHTML=['無','弱','強'].map(x=>`<button type="button" class="chip ${d[key]===x?'active':''}" data-value="${x}">${x}</button>`).join('');$(el).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const old=d[key];d[key]=b.dataset.value;action(b,async()=>{try{await persistDay(state.selected);renderSleepiness(el,key);renderDayPreview();renderChart()}catch(e){d[key]=old;throw e}})}))}
 function renderInput(){$('#entry-date').value=state.selected;updateDatePickerButtons();const a=dayData(state.selected);renderSleepiness('#wake-sleepiness','wakeSleepiness');renderSleepiness('#day-sleepiness','daySleepiness');$('#day-note').value=a.note||'';$('#day-weight').value=validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1);
@@ -226,7 +226,7 @@ function renderDayPreview(){
   return `<div class="quick-slot ${kind}" title="${time(i)} ${kind==='sleep'?'熟睡':kind==='rest'?'休息':''}${detail?' 服薬：'+esc(detail):''}">${printPattern(kind)}<span class="markers">${symbols}</span></div>`
  }).join('');
  const sorted=(a.markers||[]).map((v,i)=>({...v,originalIndex:i})).sort((x,y)=>x.slot-y.slot);
- $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'△ 就寝',wake:'▽ 起床',meal:'□ 食事'}[x.type]}${x.type==='med'?'（'+esc(medicationDetail(x))+'）':''} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
+ $('#marker-list').innerHTML=sorted.length?'<span class="muted">記号（押すと削除）：</span>'+sorted.map(x=>`<button class="marker-chip" data-i="${x.originalIndex}" title="この記号を削除">${time(x.slot)} ${{med:'◎ 服薬',bed:'▽ 就寝',wake:'△ 起床',meal:'□ 食事'}[x.type]}${x.type==='med'?'（'+esc(medicationDetail(x))+'）':''} ×</button>`).join(''):'<span class="muted">記号の記録はありません</span>';
  const summary=[];
  const sleeps=rangesForDay(a,'sleep'), rests=rangesForDay(a,'rest');
  if(sleeps.length)summary.push(['熟睡',sleeps.join('、')]);
@@ -295,16 +295,89 @@ async function saveDay(){await action($('#save-day'),async()=>{
  try{await persistDay(state.selected);renderDayPreview();renderChart();await renderAnalysis();toast('体重・眠気・出来事を保存しました')}
  catch(e){state.days[state.selected]=before;renderInput();throw e}
 });}
-function sumFor(days){let s=0,r=0,recorded=0,weights=[],wake={'無':0,'弱':0,'強':0},day={'無':0,'弱':0,'強':0};for(const key of days){const a=state.days[key];if(!a)continue;const sn=(a.slots||[]).filter(v=>v==='sleep').length*30,rn=(a.slots||[]).filter(v=>v==='rest').length*30;if(validWeight(a.weight)!==null)weights.push({date:key,value:validWeight(a.weight)});if(sn||rn||(a.markers||[]).length||a.note||a.wakeSleepiness||a.daySleepiness||validWeight(a.weight)!==null){recorded++;s+=sn;r+=rn;if(a.wakeSleepiness)wake[a.wakeSleepiness]=(wake[a.wakeSleepiness]||0)+1;if(a.daySleepiness)day[a.daySleepiness]=(day[a.daySleepiness]||0)+1}}return {s,r,recorded,wake,day,weights}}
+function sumFor(days){let s=0,r=0,recorded=0,sleepRecorded=0,weights=[],wake={'無':0,'弱':0,'強':0},day={'無':0,'弱':0,'強':0};for(const key of days){const a=state.days[key];if(!a)continue;const sn=(a.slots||[]).filter(v=>v==='sleep').length*30,rn=(a.slots||[]).filter(v=>v==='rest').length*30;if(sn||rn)sleepRecorded++;if(validWeight(a.weight)!==null)weights.push({date:key,value:validWeight(a.weight)});if(sn||rn||(a.markers||[]).length||a.note||a.wakeSleepiness||a.daySleepiness||validWeight(a.weight)!==null){recorded++;s+=sn;r+=rn;if(a.wakeSleepiness)wake[a.wakeSleepiness]=(wake[a.wakeSleepiness]||0)+1;if(a.daySleepiness)day[a.daySleepiness]=(day[a.daySleepiness]||0)+1}}return {s,r,recorded,sleepRecorded,wake,day,weights}}
 function getRange(){const dt=new Date(state.selected+'T12:00:00');let out=[];if(analysisView==='daily')return[state.selected];if(analysisView==='weekly'){const start=new Date(dt);start.setDate(dt.getDate()-6);for(let i=0;i<7;i++){const d=new Date(start);d.setDate(start.getDate()+i);out.push(iso(d))}return out}const [y,m]=monthParts(state.month),n=new Date(y,m,0).getDate();for(let d=1;d<=n;d++)out.push(dateString(y,m,d));return out}
-async function renderAnalysis(){const days=getRange();if(currentUser?.emailVerified){const months=[...new Set(days.map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
- $$('#analysis-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===analysisView));const s=sumFor(days),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
+// 表示対象は「両方」「睡眠のみ」「体重のみ」。異なる単位のグラフを重ねない。
+// 記録がない日は0や推測値で補完せず、グラフ上も欠測として表示。
+function graphData(days){
+ return days.map(key=>{
+  const day=state.days[key];
+  const hasSleep=Boolean(day&&(day.slots||[]).some(slot=>slot==='sleep'||slot==='rest'));
+  const sleepHours=hasSleep?((day.slots||[]).filter(v=>v==='sleep').length*0.5):null;
+  const weight=day?validWeight(day.weight):null;
+  return {date:key,sleepHours,weight};
+ });
+}
+function chartXLabel(key,period){return period==='monthly'?key.slice(8):key.slice(5).replace('-','/');}
+function chartNumber(n){return Number.isInteger(n)?String(n):n.toFixed(1)}
+function graphEmpty(label){return `<div class="graph-empty" role="status">${esc(label)}の記録はありません</div>`}
+function svgPlot(data,type){
+ const weightMode=type==='weight',field=weightMode?'weight':'sleepHours';
+ const recorded=data.map((d,i)=>({...d,i})).filter(d=>d[field]!==null);
+ if(!recorded.length)return graphEmpty(weightMode?'体重':'睡眠');
+ const W=Math.max(560,data.length*27+110),H=310,L=58,R=20,T=22,B=55;
+ const plotW=W-L-R,plotH=H-T-B;
+ let yMin=0,yMax=12;
+ if(weightMode){
+  const values=recorded.map(x=>x.weight),lo=Math.min(...values),hi=Math.max(...values);
+  yMin=Math.floor((lo-0.5)*2)/2;yMax=Math.ceil((hi+0.5)*2)/2;
+  if(yMax-yMin<1){yMin=lo-0.5;yMax=hi+0.5}
+ } else {yMax=Math.max(8,Math.ceil(Math.max(...recorded.map(x=>x.sleepHours),7)/2)*2)}
+ const x=i=>L+(data.length===1?plotW/2:(i+0.5)*plotW/data.length);
+ const y=v=>T+plotH-(v-yMin)/(yMax-yMin)*plotH;
+ const grid=Array.from({length:5},(_,i)=>{
+  const value=yMin+(yMax-yMin)*i/4,yy=y(value);
+  return `<line x1="${L}" y1="${yy.toFixed(2)}" x2="${W-R}" y2="${yy.toFixed(2)}" class="svg-grid"/><text x="${L-9}" y="${(yy+4).toFixed(2)}" text-anchor="end" class="svg-axis">${chartNumber(value)}</text>`
+ }).join('');
+ const step=data.length>18?Math.ceil(data.length/7):data.length>8?2:1;
+ const ticks=data.map((d,i)=>i%step===0||i===data.length-1?`<text x="${x(i).toFixed(2)}" y="${H-B+20}" text-anchor="middle" class="svg-axis">${esc(chartXLabel(d.date,analysisView))}</text>`:'').join('');
+ let drawing='';
+ if(!weightMode){
+  const barW=Math.max(5,Math.min(23,plotW/data.length*0.65));
+  drawing=recorded.map(d=>{
+   const yy=y(d.sleepHours),hh=Math.max(0,T+plotH-yy);
+   return `<rect class="svg-sleep-bar" x="${(x(d.i)-barW/2).toFixed(2)}" y="${yy.toFixed(2)}" width="${barW.toFixed(2)}" height="${hh.toFixed(2)}" rx="2"><title>${esc(d.date)}：${chartNumber(d.sleepHours)}時間</title></rect>`;
+  }).join('');
+ }else{
+  // 連続して実測値が存在する日付の間だけ接続（空白の日を補間しない）。
+  let parts=[];
+  let seq=[];
+  const flush=()=>{if(seq.length>1)parts.push(`<polyline class="svg-weight-line" points="${seq.map(p=>`${x(p.i).toFixed(2)},${y(p.weight).toFixed(2)}`).join(' ')}"/>`);seq=[];};
+  data.forEach((d,i)=>{if(d.weight===null){flush()}else seq.push({...d,i})});flush();
+  drawing=parts.join('')+recorded.map(d=>`<circle class="svg-weight-point" cx="${x(d.i).toFixed(2)}" cy="${y(d.weight).toFixed(2)}" r="4.4"><title>${esc(d.date)}：${d.weight.toFixed(1)} kg</title></circle>`).join('');
+ }
+ return `<svg class="analysis-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${weightMode?'体重（kg）':'睡眠時間（時間）'}の日付別${weightMode?'折れ線':'棒'}グラフ。記録のない日は空白。"><text x="${L}" y="13" class="svg-unit">${weightMode?'体重（kg）':'睡眠時間（時間）'}</text>${grid}<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" class="svg-axis-line"/>${ticks}${drawing}<text x="${W-R}" y="${H-6}" text-anchor="end" class="svg-unit">日付</text></svg>`;
+}
+async function renderAnalysis(){
+ const days=getRange();
+ if(currentUser?.emailVerified){const months=[...new Set(days.map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
+ $$('#analysis-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.view===analysisView));
+ $$('#analysis-targets button').forEach(b=>{const active=b.dataset.target===analysisTarget;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});
+ const s=sumFor(days),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
  const weightAvg=s.weights.length?(s.weights.reduce((sum,x)=>sum+x.value,0)/s.weights.length).toFixed(1)+' kg':'—';
  const latestWeight=s.weights.at(-1);
- const stats=[['記録した睡眠 合計',fmt(s.s),'自分で「熟睡」とした時間'],['休息 合計',fmt(s.r),'起きて布団の中にいた時間'],['記録のある日',`${s.recorded}日`,'対象期間内の登録'],['記録日の平均睡眠',s.recorded?fmt(Math.round(s.s/s.recorded/30)*30):'—','記録のある日で計算'],['体重 平均',weightAvg,`体重入力のある${s.weights.length}日で計算`],['期間内の直近体重',latestWeight?latestWeight.value.toFixed(1)+' kg':'—',latestWeight?latestWeight.date+'の記録':'記録なし']];
- $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${x[0]}</small><strong>${x[1]}</strong><p>${x[2]}</p></div>`).join('');$('#analysis-title').textContent=analysisView==='daily'?`${state.selected} の記録`:analysisView==='weekly'?'直近7日間の睡眠記録':`${state.month.replace('-','年')}月の睡眠記録`;
- $('#analysis-bars').innerHTML=days.map(k=>{const a=state.days[k],v=(a?.slots||[]).filter(x=>x==='sleep').length*30;return `<div class="baritem"><div>${k.slice(5)}</div><div class="barbg"><div class="barvalue" style="width:${Math.min(100,v/1440*100)}%"></div></div><strong>${a?fmt(v):'未入力'}${a&&validWeight(a.weight)!==null?' / '+validWeight(a.weight).toFixed(1)+'kg':''}</strong></div>`}).join('')||'<span class="muted">まだ記録がありません</span>';
+ const sleepStats=[['記録した睡眠 合計',fmt(s.s),'自分で「熟睡」とした時間'],['休息 合計',fmt(s.r),'起きて布団の中にいた時間'],['記録のある日',`${s.recorded}日`,'対象期間内の登録'],['記録日の平均睡眠',s.sleepRecorded?fmt(Math.round(s.s/s.sleepRecorded/30)*30):'—','睡眠・休息の入力がある日で計算']];
+ const weightStats=[['体重 平均',weightAvg,`体重入力のある${s.weights.length}日で計算`],['期間内の直近体重',latestWeight?latestWeight.value.toFixed(1)+' kg':'—',latestWeight?latestWeight.date+'の記録':'記録なし']];
+ const stats=analysisTarget==='sleep'?sleepStats:analysisTarget==='weight'?weightStats:[...sleepStats,...weightStats];
+ $('#analysis-stats').innerHTML=stats.map(x=>`<div class="statbox"><small>${esc(x[0])}</small><strong>${esc(x[1])}</strong><p>${esc(x[2])}</p></div>`).join('');
+ const title=analysisView==='daily'?`${state.selected} の記録`:analysisView==='weekly'?'直近7日間の記録':`${state.month.replace('-','年')}月の記録`;
+ $('#analysis-title').textContent=title;
+ $('#sleep-graph-panel').hidden=analysisTarget==='weight';
+ $('#weight-graph-panel').hidden=analysisTarget==='sleep';
+ const data=graphData(days);
+ if(analysisTarget!=='weight')$('#analysis-sleep-chart').innerHTML=svgPlot(data,'sleep');
+ if(analysisTarget!=='sleep')$('#analysis-weight-chart').innerHTML=svgPlot(data,'weight');
+ // 元からあった日付別リストもそのまま活用。未記録日は0と見せない。
+ $('#analysis-bars').innerHTML=days.map(k=>{
+  const a=state.days[k];const v=(a?.slots||[]).filter(x=>x==='sleep').length*30;
+  const hasSleep=Boolean(a&&(a.slots||[]).some(x=>x==='sleep'||x==='rest'));
+  const sleepLabel=hasSleep?fmt(v):'未入力';
+  const weightLabel=a&&validWeight(a.weight)!==null?validWeight(a.weight).toFixed(1)+' kg':'未入力';
+  if(analysisTarget==='weight')return `<div class="baritem"><div>${k.slice(5)}</div><div class="record-value-only">体重：${weightLabel}</div></div>`;
+  return `<div class="baritem"><div>${k.slice(5)}</div><div class="barbg"><div class="barvalue" style="width:${hasSleep?Math.min(100,v/1440*100):0}%"></div></div><strong>${sleepLabel}${analysisTarget==='both'&&weightLabel!=='未入力'?' / '+weightLabel:''}</strong></div>`;
+ }).join('')||'<span class="muted">まだ記録がありません</span>';
 }
+
 function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';updateDatePickerButtons();$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})));renderMedicineRows()}
 function syncMedicineInputs(){for(const row of $$('#medicine-rows .medicine-row')){const m=state.medicines.find(m=>m.id===row.dataset.id);if(m)row.querySelectorAll('input').forEach(i=>{m[i.dataset.key]=i.value})}}
 function renderMedicineRows(){const ms=state.medicines;$('#medicine-rows').innerHTML=ms.length?ms.map(m=>`<div class="medicine-row" data-id="${esc(m.id)}"><input aria-label="薬の名前" type="text" maxlength="80" data-key="name" value="${esc(m.name||'')}" placeholder="薬の名前"><input aria-label="服用開始日" type="date" data-key="start" value="${esc(m.start||'')}"><input aria-label="服用終了日" type="date" data-key="end" value="${esc(m.end||'')}"><button class="btn small danger" title="薬の行を削除" data-remove="${esc(m.id)}">×</button></div>`).join(''):'<span class="muted">まだ薬がありません。「＋ 薬を追加」から登録できます。</span>';
@@ -365,8 +438,8 @@ async function downloadOnePagePdf(){
     const m=marks[k],total=Math.min(marks.length,3),symbolX=cellX+slotW/2+(k-(total-1)/2)*9,cy=y+rowH/2;
     cx.save();cx.strokeStyle=kind==='sleep'?'#ffffff':'#182531';cx.lineWidth=2.3;cx.beginPath();
     if(m.type==='med'){cx.arc(symbolX,cy,5.2,0,Math.PI*2);cx.moveTo(symbolX+2.3,cy);cx.arc(symbolX,cy,2.3,0,Math.PI*2)}
-    if(m.type==='bed'){cx.moveTo(symbolX,cy-7);cx.lineTo(symbolX+6.5,cy+6);cx.lineTo(symbolX-6.5,cy+6);cx.closePath()}
-    if(m.type==='wake'){cx.moveTo(symbolX-6.5,cy-6);cx.lineTo(symbolX+6.5,cy-6);cx.lineTo(symbolX,cy+7);cx.closePath()}
+    if(m.type==='wake'){cx.moveTo(symbolX,cy-7);cx.lineTo(symbolX+6.5,cy+6);cx.lineTo(symbolX-6.5,cy+6);cx.closePath()}
+    if(m.type==='bed'){cx.moveTo(symbolX-6.5,cy-6);cx.lineTo(symbolX+6.5,cy-6);cx.lineTo(symbolX,cy+7);cx.closePath()}
     if(m.type==='meal'){cx.rect(symbolX-6,cy-6,12,12)}
     cx.stroke();cx.restore();
     // 1つの時刻に服用薬が1種類の場合は、錠数を◎の下に併記する。
@@ -389,8 +462,8 @@ async function downloadOnePagePdf(){
  line(margin,top,margin+tableW,top,'#8e9aa8',2);line(margin,top+headH,margin+tableW,top+headH,'#8e9aa8',2);
  const footerY=top+headH+numDays*rowH+25;
  tx('■ 熟睡',margin,footerY,'21px sans-serif');tx('╱ 休息（布団の中）',margin+135,footerY,'21px sans-serif');
- tx('◎ 服薬',margin+445,footerY,'21px sans-serif');tx('△ 就寝',margin+590,footerY,'21px sans-serif');
- tx('▽ 起床',margin+730,footerY,'21px sans-serif');tx('□ 食事',margin+870,footerY,'21px sans-serif');
+ tx('◎ 服薬',margin+445,footerY,'21px sans-serif');tx('▽ 就寝',margin+590,footerY,'21px sans-serif');
+ tx('△ 起床',margin+730,footerY,'21px sans-serif');tx('□ 食事',margin+870,footerY,'21px sans-serif');
  tx('黄色の時間見出し：通常の睡眠時間帯',margin+1050,footerY,'19px sans-serif','#40556d');
  const activeMeds=state.medicines.filter(m=>m.name&&(!m.start||m.start<=dateString(year,month,numDays))&&(!m.end||m.end>=dateString(year,month,1)));
  const note=activeMeds.length?'服用薬・変更履歴：'+activeMeds.map(m=>`${m.name}（${m.start||'開始日未設定'}${m.end?'～'+m.end:''}）`).join('／'):'服用薬・変更履歴：記録なし';
@@ -437,6 +510,7 @@ $$('.mode').forEach(b=>b.addEventListener('click',()=>{selectedMode=b.dataset.mo
 $('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(val)){toast('日付を正しく指定してください');e.target.value=state.selected;return}action(null,async()=>{await loadMonth(val.slice(0,7));state.selected=val;state.month=val.slice(0,7);renderInput();renderChart()})});
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
 $$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisView=b.dataset.view;await renderAnalysis()})));
+$$('#analysis-targets button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{analysisTarget=b.dataset.target;await renderAnalysis()})));
 $('#save-settings').addEventListener('click',saveSettings);$('#add-medicine').addEventListener('click',()=>{syncMedicineInputs();state.medicines.push({id:makeId(),name:'',start:state.selected,end:''});renderMedicineRows()});
 // iPhone Safariで幅が崩れるネイティブ日付・年月入力を、同じ幅のカレンダー選択に置換。
 // Firestoreへの保存形式（YYYY-MM-DD / YYYY-MM）は従来どおり維持。

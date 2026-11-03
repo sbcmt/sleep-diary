@@ -270,3 +270,29 @@
   .month-nav { flex-wrap:wrap; }
   .auth-grid input, .field input, .field select, .field textarea { max-width:100%; }
 }
+
+/* Ver.1.0.7 「分析」：睡眠（単色の棒）・体重（折れ線）を別グラフで表示 */
+.analysis-controls{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;margin:16px 0 20px}
+.analysis-control-group{min-width:0;display:flex;flex-direction:column;gap:6px}
+.analysis-control-label{font-size:13px;font-weight:700;color:var(--ink)}
+.analysis-control-group .analysis-tabs{display:flex;flex-wrap:wrap;gap:7px;margin:0}
+.analysis-control-group .analysis-tabs button{white-space:nowrap}
+#analysis-graphs{display:flex;flex-direction:column;gap:16px;margin-bottom:18px}
+.analysis-graph-panel[hidden]{display:none!important}
+.analysis-graph-panel{min-width:0;overflow:hidden}
+.analysis-graph-description{margin:4px 0 14px;font-size:13px}
+.analysis-graph-frame{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.analysis-svg{display:block;max-width:none;color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif}
+.svg-grid{stroke:#dde4ed;stroke-width:1;stroke-dasharray:3 3}
+.svg-axis-line{stroke:#92a3b8;stroke-width:1.25}
+.svg-axis,.svg-unit{font-size:12px;fill:#64748b}
+.svg-unit{font-size:12px;font-weight:600}
+.svg-sleep-bar{fill:var(--sleep,var(--accent,#7b6aab))}
+.svg-weight-line{fill:none;stroke:var(--accent,#7b6aab);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.svg-weight-point{fill:#fff;stroke:var(--accent,#7b6aab);stroke-width:2.8}
+.graph-empty{padding:36px 12px;text-align:center;color:#62738a;background:#f7f9fc;border-radius:10px;font-size:14px}
+.record-value-only{flex:1;min-width:0;padding:8px 12px;background:#f6f8fc;border-radius:8px;font-weight:650}
+@media(max-width:480px){.analysis-controls{gap:12px}.analysis-control-group .analysis-tabs button{font-size:14px;padding:9px 12px}}
+@media print{#analysis-graphs{display:none!important}}
+
+.auth-policy-link{font-size:13px;text-align:center;margin:16px 0 0}.auth-policy-link a,.disclosure a{color:#326b50;text-underline-offset:3px}
