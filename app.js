@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.2.6 (2026-11-04) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.7 (2026-11-04) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -7,11 +7,11 @@ import {
   signInWithEmailAndPassword, signOut, sendEmailVerification,
   setPersistence, browserLocalPersistence, browserSessionPersistence,
   sendPasswordResetEmail, reload, getIdToken,
-  verifyBeforeUpdateEmail, EmailAuthProvider, reauthenticateWithCredential
+  verifyBeforeUpdateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   getFirestore, doc, collection, getDoc, getDocs, setDoc, deleteDoc,
-  query, where, documentId, orderBy, limit, writeBatch, serverTimestamp
+  query, where, documentId, orderBy, limit, writeBatch, serverTimestamp, getDocsFromServer, getDocFromServer
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -91,7 +91,7 @@ const doseValues=new Set([0.5,1,2,3,4,5,6,7,8]);
 const medicineTimings=['毎食前','朝食前','昼食前','夕食前','毎食直前','朝食直前','昼食直前','夕食直前','毎食後','朝食後','昼食後','夕食後','毎食直後','朝食直後','昼食直後','夕食直後','毎食間','朝昼の間','昼夕の間','起床時','就寝前','頓服（必要なとき）','時刻指定','一定時間ごと','その他'];
 
 const state={month:iso(new Date()).slice(0,7),selected:iso(new Date()),settings:blankSettings(),days:{},medicines:[],loadedMonths:new Set()};
-let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),analysisDay=state.selected,analysisWeek='',analysisViewportKey='',weekBoundsCached=false,weekBoundsReliable=false,earliestRecordDate='',latestRecordDate='',currentUser=null, sessionEpoch=0, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
+let selectedMode='sleep',analysisView='daily',analysisTarget='both',analysisMonth=iso(new Date()).slice(0,7),analysisDay=state.selected,analysisWeek='',analysisViewportKey='',weekBoundsCached=false,weekBoundsReliable=false,earliestRecordDate='',latestRecordDate='',currentUser=null, sessionEpoch=0, deletionPending=false, deletionBusy=false, medFilter='active', busy=false, verifyTimer=null, checkingVerification=false;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(window._toastTimer);window._toastTimer=setTimeout(()=>el.classList.remove('show'),3600)}
 function notice(msg){$('#auth-notice').textContent=msg;$('#auth-notice').classList.add('show')}
@@ -139,7 +139,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function userDoc(){return doc(db,'users',currentUser.uid)}
 function dayRef(key){return doc(db,'users',currentUser.uid,'days',key)}
 function medRef(key){return doc(db,'users',currentUser.uid,'medications',key)}
-function assertSession(){if(!currentUser||!currentUser.emailVerified)throw new Error('not signed in')}
+function assertSession(){if(deletionPending)throw new Error('account deletion pending');if(!currentUser||!currentUser.emailVerified)throw new Error('not signed in')}
 function normalDay(key){const a=state.days[key];return a?{...freshDay(),...a,note:String(a.note??'').slice(0,500),weight:validWeight(a.weight),slots:Array.from({length:48},(_,i)=>['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:''),markers:(a.markers||[]).filter(x=>Number.isInteger(x.slot)&&x.slot>=0&&x.slot<48&&['med','bed','wake','meal'].includes(x.type))}:freshDay()}
 function validWeight(v){return typeof v==='number'&&Number.isFinite(v)&&v>=0.1&&v<=500&&Math.abs(v*10-Math.round(v*10))<0.00001?Math.round(v*10)/10:null}
 function dayData(key){return state.days[key]??(state.days[key]=freshDay())}
@@ -152,7 +152,10 @@ async function loadMonth(month){
 }
 async function loadInitial(){
  assertSession();const uid=currentUser.uid,epoch=sessionEpoch;
- const [settingsSnap,medsSnap]=await Promise.all([getDoc(userDoc()),getDocs(collection(db,'users',uid,'medications'))]);
+ const settingsSnap=await getDocFromServer(userDoc());
+ if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
+ if(settingsSnap.data()?.deletionInProgress || await hasPendingDeletionFlag(uid))return 'pending-deletion';
+ const medsSnap=await getDocs(collection(db,'users',uid,'medications'));
  if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
  state.settings={...blankSettings(),...(settingsSnap.exists()?settingsSnap.data():{})};
  // 月間睡眠表の初期表示は必ず開いた日の当月とする。保存済み初期月の指定は参照しない。
@@ -197,6 +200,7 @@ function clearSensitiveSessionState(){
  $('#auth-notice').textContent='';$('#auth-notice').classList.remove('show');
  const dialog=$('#date-picker-dialog');if(dialog?.open)dialog.close();
  const guide=$('#guide-dialog');if(guide?.open)guide.close();
+ const deleteDialog=$('#account-delete-dialog');if(deleteDialog?.open)deleteDialog.close();
  $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab==='report'));
  $$('.screen').forEach(el=>el.classList.toggle('active',el.id==='screen-report'));
  $('#med-list-view').hidden=false;$('#med-form-view').hidden=true;
@@ -211,13 +215,17 @@ async function accountState(u){
   view('loading-screen');clearSensitiveSessionState();
  }
  currentUser=u;
- if(!u){view('auth-view');return}
+ if(!u){deletionPending=false;deletionBusy=false;view('auth-view');return}
  view('loading-screen');
  try{await reload(u);await getIdToken(u,true)}catch(e){console.warn('refresh auth',safeErrorCode(e))}
  if(epoch!==sessionEpoch)return;
  if(!u.emailVerified){$('#verify-email-value').textContent=u.email||'';view('verify-view');return}
- try{await loadInitial();if(epoch!==sessionEpoch)return;
+ try{const loadResult=await loadInitial();if(epoch!==sessionEpoch)return;
    $('#account-email').textContent=u.email||'';view('app-view');
+   if(loadResult==='pending-deletion'){
+     await show('settings');if(epoch!==sessionEpoch)return;
+     deletionPending=true;openAccountDeleteDialog(true);
+   }
  }catch(e){if(epoch!==sessionEpoch)return;console.error('認証データ取得エラー',safeErrorCode(e));notice(errMsg(e));view('auth-view');}
 }
 onAuthStateChanged(auth,accountState);
@@ -248,6 +256,128 @@ async function changeEmail(){const email=$('#new-email').value.trim(),pwd=$('#re
 async function passwordResetSigned(){if(!currentUser?.email)return;
  await action($('#reset-signed-password'),async()=>{await sendPasswordResetEmail(auth,currentUser.email);toast('登録メールアドレスへ再設定リンクを送信しました')});}
 async function reloadEmailStatus(){if(!currentUser)return;await action($('#send-verification-settings'),async()=>{await sendEmailVerification(currentUser,verificationActionSettings());toast('メール確認リンクを送信しました')});}
+
+
+// Spark無料プラン専用：アカウント本人による段階的削除。
+// Firestoreの実データとAuthenticationの削除は1つのトランザクションにできない。
+// 途中失敗時もAuthを残し、本人の再認証で再試行できるようにする。
+// ローカルにはUIDのSHA-256のみを進行状況識別子として保存し、記録・メール・パスワードは保存しない。
+const DELETE_FLAG_PREFIX='sleep-diary:pending-delete:';
+async function deletionFlagKey(uid){
+ const bytes=new TextEncoder().encode('sleep-diary:account-delete:v1:'+uid);
+ const digest=await crypto.subtle.digest('SHA-256',bytes);
+ return DELETE_FLAG_PREFIX+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function hasPendingDeletionFlag(uid){
+ return localStorage.getItem(await deletionFlagKey(uid))==='1';
+}
+function showDeleteStatus(text){$('#account-delete-status').textContent=text}
+function syncDeleteConfirmButton(){
+ $('#account-delete-confirm').disabled=deletionBusy || !$('#account-delete-password').value || !$('#account-delete-ack').checked;
+}
+function openAccountDeleteDialog(resume=false){
+ if(!auth.currentUser?.emailVerified || !currentUser || auth.currentUser.uid!==currentUser.uid)return;
+ const d=$('#account-delete-dialog');
+ $('#account-delete-password').value='';$('#account-delete-ack').checked=false;
+ $('#account-delete-recovery').classList.toggle('site-hidden',!resume);
+ $('#account-delete-confirm').textContent=resume?'削除を再開する':'完全に削除する';
+ $('#account-delete-cancel').textContent=resume?'ログアウトして後で再開':'キャンセル';
+ showDeleteStatus('');deletionBusy=false;syncDeleteConfirmButton();
+ if(!d.open)d.showModal();
+}
+async function cancelAccountDeletion(){
+ if(deletionBusy)return;
+ const dialog=$('#account-delete-dialog');
+ $('#account-delete-password').value='';$('#account-delete-ack').checked=false;
+ if(dialog.open)dialog.close();
+ if(deletionPending){
+  try{await secureSignOut()}catch(e){console.warn('削除中のログアウト',safeErrorCode(e));view('auth-view')}
+ }
+}
+async function deleteCollectionInChunks(uid,name){
+ const ref=collection(db,'users',uid,name);
+ let total=0;
+ for(;;){
+  if(auth.currentUser?.uid!==uid)throw new Error('account changed');
+  const snap=await getDocsFromServer(query(ref,limit(100)));
+  if(snap.empty)break;
+  const batch=writeBatch(db);
+  for(const document of snap.docs)batch.delete(document.ref);
+  await batch.commit();total+=snap.docs.length;
+  if(total>100000)throw new Error('too many documents');
+ }
+ // 終了判定もキャッシュを使わずサーバーに問い合わせる。
+ if(!(await getDocsFromServer(query(ref,limit(1)))).empty)throw new Error('deletion verification failed');
+}
+async function submitAccountDeletion(){
+ if(deletionBusy || !$('#account-delete-ack').checked)return;
+ const user=auth.currentUser;
+ if(!user?.emailVerified || !currentUser || user.uid!==currentUser.uid)return;
+ let password=$('#account-delete-password').value;
+ if(!password)return;
+ deletionBusy=true;syncDeleteConfirmButton();
+ $('#account-delete-cancel').disabled=true;
+ let authorized=false;
+ try{
+  showDeleteStatus('本人確認中です…');
+  const credential=EmailAuthProvider.credential(user.email,password);
+  password='';$('#account-delete-password').value='';
+  await reauthenticateWithCredential(user,credential);authorized=true;
+  if(auth.currentUser?.uid!==user.uid)throw new Error('account changed');
+  // ローカル進捗を書き込めない環境では、取り返しのつかない削除を開始しない。
+  const key=await deletionFlagKey(user.uid);
+  localStorage.setItem(key,'1');
+  // Firestoreにもマーカーを保存し、別端末からログインした場合にも再開画面を出す。
+  const root=doc(db,'users',user.uid);
+  const existing=await getDocFromServer(root);
+  if(!existing.data()?.deletionInProgress){
+   await setDoc(root,{deletionInProgress:true,deletionRequestedAt:serverTimestamp()},{merge:true});
+  }
+  deletionPending=true;try{logoutChannel?.postMessage('account-deleting')}catch(e){console.warn('削除通知',safeErrorCode(e))}
+  showDeleteStatus('睡眠・体重の記録を削除しています…');
+  await deleteCollectionInChunks(user.uid,'days');
+  showDeleteStatus('お薬・サプリの記録を削除しています…');
+  await deleteCollectionInChunks(user.uid,'medications');
+  // deleteUser成功前には認証情報を消さない。別コレクションが追加された場合は別途対応が必要。
+  showDeleteStatus('削除結果を確認しています…');
+  for(const name of ['days','medications']){
+   const left=await getDocsFromServer(query(collection(db,'users',user.uid,name),limit(1)));
+   if(!left.empty)throw new Error('deletion verification failed');
+  }
+  await deleteDoc(root);
+  showDeleteStatus('ログインアカウントを削除しています…');
+  await deleteUser(user);
+  localStorage.removeItem(key);
+  deletionPending=false;
+  $('#account-delete-dialog').close();
+  view('loading-screen');clearSensitiveSessionState();
+  view('auth-view');
+  notifyOtherTabsOfSignOut();
+  notice('アカウントとクラウドの記録を削除しました。端末に保存したPDFは必要に応じて個別に削除してください。');
+ }catch(e){
+  console.warn('アカウント削除',safeErrorCode(e));
+  showDeleteStatus(authorized
+   ? '削除を完了できませんでした。再度パスワードを入力して「削除を再開する」を押してください。通信できない場合は、運営者へお問い合わせください。'
+   : errMsg(e));
+  if(authorized){
+   deletionPending=deletionPending || await hasPendingDeletionFlag(user.uid).catch(()=>false);
+   $('#account-delete-recovery').classList.remove('site-hidden');
+   $('#account-delete-confirm').textContent='削除を再開する';
+   $('#account-delete-cancel').textContent='ログアウトして後で再開';
+  }
+ }finally{
+  password='';$('#account-delete-password').value='';
+  deletionBusy=false;$('#account-delete-cancel').disabled=false;syncDeleteConfirmButton();
+ }
+}
+$('#account-delete-open').addEventListener('click',()=>openAccountDeleteDialog(false));
+$('#account-delete-password').addEventListener('input',syncDeleteConfirmButton);
+$('#account-delete-ack').addEventListener('change',syncDeleteConfirmButton);
+$('#account-delete-confirm').addEventListener('click',submitAccountDeletion);
+$('#account-delete-cancel').addEventListener('click',cancelAccountDeletion);
+$('#account-delete-dialog').addEventListener('cancel',e=>{
+ e.preventDefault();if(!deletionBusy)void cancelAccountDeletion();
+});
 
 function applyTheme(){const t=themes[state.settings.theme]||themes.blue;for(const [key,val] of Object.entries({'--accent':t.accent,'--soft':t.soft,'--sleep':t.sleep,'--rest':t.rest}))document.documentElement.style.setProperty(key,val)}
 function isHabit(i){let b=idx(state.settings.habitBed),w=idx(state.settings.habitWake);return b===w?false:b<w?i>=b&&i<w:i>=b||i<w}
@@ -840,7 +970,10 @@ async function applyRemoteSignOut(){
  try{await signOut(auth)}catch(e){console.warn('別タブからのログアウト反映に失敗',safeErrorCode(e))}
  finally{remoteSigningOut=false}
 }
-if(logoutChannel)logoutChannel.onmessage=e=>{if(e.data==='signout')void applyRemoteSignOut()};
+if(logoutChannel)logoutChannel.onmessage=e=>{
+ if(e.data==='signout')void applyRemoteSignOut();
+ if(e.data==='account-deleting' && auth.currentUser){deletionPending=true;view('loading-screen');clearSensitiveSessionState();$('#loading-screen').textContent='別のタブでアカウントを削除中です。完了後に再読み込みしてください。';}
+};
 window.addEventListener('storage',e=>{if(e.key===LOGOUT_SIGNAL_KEY&&e.newValue)void applyRemoteSignOut()});
 function notifyOtherTabsOfSignOut(){
  try{logoutChannel?.postMessage('signout')}catch(e){console.warn('別タブへの通知',safeErrorCode(e))}

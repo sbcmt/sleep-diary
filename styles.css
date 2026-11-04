@@ -591,3 +591,21 @@
 .auth-remember-row{display:flex;align-items:center;gap:9px;margin:14px 0 0;cursor:pointer;color:var(--ink);font-weight:700;font-size:13px;line-height:1.5}
 .auth-remember-row input{flex:none;width:18px;height:18px;margin:0;accent-color:var(--accent);cursor:pointer}
 .auth-remember-help{margin:4px 0 0 27px;font-size:12px;color:#67768a}
+
+/* v1.2.7: ユーザー設定の末尾にのみアカウント削除機能を追加 */
+.account-delete-section{border-top:2px solid #e4c8c8}
+.account-delete-section h2{color:#8c343b}
+.account-delete-section .btn.danger,.account-delete-actions .btn.danger{border-color:#b14949;color:#a13232;background:#fff}
+.account-delete-actions .btn.danger:not(:disabled):hover,.account-delete-section .btn.danger:hover{background:#fff3f3}
+.account-delete-dialog{border:1px solid #d7dfe9;border-radius:14px;padding:22px;width:min(94vw,520px);max-height:88vh;overflow-y:auto;background:#fff;color:var(--ink);box-shadow:0 20px 60px #15253b44}
+.account-delete-dialog::backdrop{background:#12223a99}
+.account-delete-dialog h2{font-size:19px;margin:0 0 10px}
+.account-delete-dialog p{margin:7px 0 13px}
+.account-delete-dialog .field input{width:100%;min-width:0}
+.account-delete-ack{display:flex;gap:9px;align-items:flex-start;font-size:13px;font-weight:650;margin:15px 0}
+.account-delete-ack input{margin:3px 0 0;accent-color:#a13232;flex:none;width:17px;height:17px}
+.account-delete-actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end;margin-top:16px}
+.account-delete-status{font-size:12px;min-height:1.3em;color:#7b3b42}
+.account-delete-recovery{background:#fff4ed;color:#873e28;padding:11px 13px;border:1px solid #e7c6ac;border-radius:8px}
+@media(max-width:550px){.account-delete-dialog{padding:17px}.account-delete-actions{flex-direction:column-reverse}.account-delete-actions .btn{width:100%}}
+@media print{.account-delete-section,.account-delete-dialog{display:none!important}}
