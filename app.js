@@ -136,13 +136,13 @@ async function loadMonth(month){
  assertSession();if(state.loadedMonths.has(month))return;
  const uid=currentUser.uid;
  const q=query(collection(db,'users',uid,'days'),where(documentId(),'>=',`${month}-01`),where(documentId(),'<=',`${month}-31`));
- const snap=await getDocs(q);if(uid!==currentUser?.uid)return;
+ const epoch=sessionEpoch;const snap=await getDocs(q);if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
  snap.docs.forEach(d=>{state.days[d.id]={...freshDay(),...d.data()}});state.loadedMonths.add(month);
 }
 async function loadInitial(){
- assertSession();const uid=currentUser.uid;
+ assertSession();const uid=currentUser.uid,epoch=sessionEpoch;
  const [settingsSnap,medsSnap]=await Promise.all([getDoc(userDoc()),getDocs(collection(db,'users',uid,'medications'))]);
- if(uid!==currentUser?.uid)return;
+ if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
  state.settings={...blankSettings(),...(settingsSnap.exists()?settingsSnap.data():{})};
  // 月間睡眠表の初期表示は必ず開いた日の当月とする。保存済み初期月の指定は参照しない。
  state.month=iso(new Date()).slice(0,7);
@@ -150,15 +150,54 @@ async function loadInitial(){
  state.days={};state.loadedMonths.clear();
  weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';
  await loadMonth(state.month);
+ if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
  const today=iso(new Date());analysisMonth=today.slice(0,7);analysisDay=today;analysisWeek=weekStart(today);analysisViewportKey='';
  applyTheme();renderChart();renderInput();renderSettings();await renderAnalysis();
+ if(epoch!==sessionEpoch)return;
 }
-async function persistDay(key){assertSession();const item=normalDay(key);await setDoc(dayRef(key),{...item,updatedAt:serverTimestamp()});
+async function persistDay(key){assertSession();const epoch=sessionEpoch,item=normalDay(key);await setDoc(dayRef(key),{...item,updatedAt:serverTimestamp()});
+ if(epoch!==sessionEpoch)return;
  if(weekBoundsCached){if(!earliestRecordDate||key<earliestRecordDate)earliestRecordDate=key;if(!latestRecordDate||key>latestRecordDate)latestRecordDate=key}
 }
 async function persistSettings(){assertSession();const {name,habitBed,habitWake,theme,firstMonth}=state.settings;await setDoc(userDoc(),{name,habitBed,habitWake,theme,firstMonth,updatedAt:serverTimestamp()},{merge:true});}
+// ログアウト・別アカウント切替・認証取り消し時に、ブラウザの表示と保持中の記録への参照を破棄する。
+// 画面を非表示にするだけでは、DOMやJavaScriptのメモリ内に以前の利用者の情報が残る。
+function clearSensitiveSessionState(){
+ const today=iso(new Date());
+ state.days={};state.medicines=[];state.loadedMonths.clear();
+ state.settings=blankSettings();state.month=today.slice(0,7);state.selected=today;
+ selectedMode='sleep';analysisView='daily';analysisTarget='both';analysisMonth=today.slice(0,7);
+ analysisDay=today;analysisWeek=weekStart(today);analysisViewportKey='';
+ weekBoundsCached=false;weekBoundsReliable=false;earliestRecordDate='';latestRecordDate='';medFilter='active';
+ // ログアウト時に非表示になっていても、古い描画内容をDOMから除去する。
+ const clearHtml=['#sleep-table','#med-list','#quicktimeline','#marker-list','#daily-summary',
+  '#analysis-stats','#analysis-bars','#analysis-sleep-chart','#analysis-weight-chart',
+  '#wake-sleepiness','#day-sleepiness','#analysis-week'];
+ for(const selector of clearHtml){const el=$(selector);if(el)el.replaceChildren()}
+ const clearText=['#account-email','#verify-email-value','#print-person','#print-month','#print-range',
+  '#month-label','#day-duration','#day-rest','#analysis-stats-period','#analysis-daily-summary',
+  '#analysis-first-record','#analysis-title','#entry-date-text','#analysis-day-text',
+  '#first-month-text','#med-start-text','#med-end-text'];
+ for(const selector of clearText){const el=$(selector);if(el)el.textContent=''}
+ $$('#app-view input, #app-view textarea').forEach(el=>{if(el.type!=='checkbox'&&el.type!=='radio')el.value=''});
+ $$('#app-view select').forEach(el=>{el.selectedIndex=0});
+ $('#auth-email').value='';$('#auth-password').value='';
+ $('#auth-notice').textContent='';$('#auth-notice').classList.remove('show');
+ const dialog=$('#date-picker-dialog');if(dialog?.open)dialog.close();
+ const guide=$('#guide-dialog');if(guide?.open)guide.close();
+ $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab==='report'));
+ $$('.screen').forEach(el=>el.classList.toggle('active',el.id==='screen-report'));
+ $('#med-list-view').hidden=false;$('#med-form-view').hidden=true;
+ clearTimeout(window._toastTimer);$('#toast').textContent='';$('#toast').classList.remove('show');
+ applyTheme();
+}
 async function accountState(u){
  const epoch=++sessionEpoch;
+ const previousUid=currentUser?.uid;
+ if(!u || !u.emailVerified || (previousUid && previousUid!==u.uid)){
+  // 非表示にしてから機微データを消去する。
+  view('loading-screen');clearSensitiveSessionState();
+ }
  currentUser=u;
  if(!u){view('auth-view');return}
  view('loading-screen');
@@ -222,9 +261,10 @@ function renderChart(){
  $('#sleep-table').innerHTML=head+'<tbody>'+body+'</tbody>';
  $$('#sleep-table tbody tr').forEach(tr=>tr.addEventListener('click',()=>action(null,async()=>{state.selected=tr.dataset.date;await show('input')})));
 }
-async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('年月を正しく指定してください');return}await loadMonth(month);state.month=month;renderChart();await renderAnalysis()}
+async function jumpMonth(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('年月を正しく指定してください');return}const epoch=sessionEpoch;await loadMonth(month);if(epoch!==sessionEpoch)return;state.month=month;renderChart();await renderAnalysis()}
 async function monthShift(n){const [y,m]=monthParts(state.month),d=new Date(y,m-1+n,1);await jumpMonth(dateString(d.getFullYear(),d.getMonth()+1,1).slice(0,7))}
 async function show(tab){
+ const epoch=sessionEpoch;
  if(tab==='report'){
   // 月間睡眠表を開くたびに当月へ戻す。画面内の前月／翌月操作は維持する。
   const currentMonth=iso(new Date()).slice(0,7);
@@ -232,6 +272,7 @@ async function show(tab){
   state.month=currentMonth;
  }
  if(tab==='input')await loadMonth(state.selected.slice(0,7));
+ if(epoch!==sessionEpoch)return;
  if(tab==='analysis'){
   // 分析画面を開くたびに当日・当月・当日を含む日曜始まりの週へ戻す。
   const today=iso(new Date());analysisDay=today;analysisMonth=today.slice(0,7);analysisWeek=weekStart(today);analysisViewportKey='';
@@ -249,7 +290,7 @@ function renderModes(){
  $('#entry-end').disabled=single;
  $('#entry-help').textContent=single?'指定した時刻に記号を付けます。':selectedMode==='erase'?'選択した範囲の熟睡・休息・◎服薬・▽就寝・△起床・□食事を消去します。同じ時刻なら30分枠を消去します。':'開始から終了まで記録します。翌日にまたがる指定もできます。';
 }
-function renderSleepiness(el,key){const d=dayData(state.selected);$(el).innerHTML=['無','弱','強'].map(x=>`<button type="button" class="chip ${d[key]===x?'active':''}" data-value="${x}">${x}</button>`).join('');$(el).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const old=d[key];d[key]=b.dataset.value;action(b,async()=>{try{await persistDay(state.selected);renderSleepiness(el,key);renderDayPreview();renderChart()}catch(e){d[key]=old;throw e}})}))}
+function renderSleepiness(el,key){const d=dayData(state.selected);$(el).innerHTML=['無','弱','強'].map(x=>`<button type="button" class="chip ${d[key]===x?'active':''}" data-value="${x}">${x}</button>`).join('');$(el).querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const old=d[key],epoch=sessionEpoch;d[key]=b.dataset.value;action(b,async()=>{try{await persistDay(state.selected);if(epoch!==sessionEpoch)return;renderSleepiness(el,key);renderDayPreview();renderChart()}catch(e){if(epoch!==sessionEpoch)return;d[key]=old;throw e}})}))}
 function renderInput(){$('#entry-date').value=state.selected;updateDatePickerButtons();const a=dayData(state.selected);renderSleepiness('#wake-sleepiness','wakeSleepiness');renderSleepiness('#day-sleepiness','daySleepiness');$('#day-note').value=a.note||'';$('#day-weight').value=validWeight(a.weight)===null?'':validWeight(a.weight).toFixed(1);
  renderModes();renderDayPreview()}
 function rangesForDay(a,kind){
@@ -280,7 +321,7 @@ function renderDayPreview(){
  if(validWeight(a.weight)!==null)summary.push(['体重',`${validWeight(a.weight).toFixed(1)} kg`]);
  if(a.note)summary.push(['出来事',a.note]);
  $('#daily-summary').innerHTML=summary.length?summary.map(([label,value])=>`<div class="summary-line"><strong>${esc(label)}</strong><span>${esc(value)}</span></div>`).join(''):'<div class="muted">この日の記録はまだありません。</div>';
- $$('#marker-list button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const copy=structuredClone(a);a.markers.splice(Number(b.dataset.i),1);try{await persistDay(state.selected);renderInput();renderChart();toast('記号を削除しました')}catch(e){state.days[state.selected]=copy;throw e}})));
+ $$('#marker-list button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const copy=structuredClone(a),epoch=sessionEpoch;a.markers.splice(Number(b.dataset.i),1);try{await persistDay(state.selected);if(epoch!==sessionEpoch)return;renderInput();renderChart();toast('記号を削除しました')}catch(e){if(epoch!==sessionEpoch)return;state.days[state.selected]=copy;throw e}})));
 }
 function minutes(a,kind){const x=(a?.slots||[]).filter(v=>v===kind).length*30;return `${Math.floor(x/60)}時間${x%60?'30分':''}`}
 // 選択時間に含まれる記録を、塗りつぶしと記号の両方から消去する。
@@ -290,7 +331,7 @@ function eraseTimedEntries(day,from,to){
  day.markers=(day.markers||[]).filter(m=>!(m.slot>=from&&m.slot<to));
 }
 async function applyEntry(){await action($('#add-entry'),async()=>{
- const date=state.selected,start=idx($('#entry-start').value),requestedEnd=idx($('#entry-end').value);
+ const epoch=sessionEpoch,date=state.selected,start=idx($('#entry-start').value),requestedEnd=idx($('#entry-end').value);
  const symbols=['med','bed','wake','meal'].includes(selectedMode),erasing=selectedMode==='erase';
  if(!Number.isInteger(start)||start<0||start>=48){toast('開始時刻は00:00〜23:30を選んでください');return}
  if(!Number.isInteger(requestedEnd)||requestedEnd<0||requestedEnd>48){toast('終了時刻を確認してください');return}
@@ -300,6 +341,7 @@ async function applyEntry(){await action($('#add-entry'),async()=>{
  const next=nextDay(date),keys=new Set([date]);
  if(!symbols&&end<start)keys.add(next);
  await Promise.all([...keys].map(k=>loadMonth(k.slice(0,7))));
+ if(epoch!==sessionEpoch)return;
  const backup=Object.fromEntries([...keys].map(k=>[k,structuredClone(normalDay(k))]));
  const a=dayData(date);
  if(symbols){
@@ -317,21 +359,22 @@ async function applyEntry(){await action($('#add-entry'),async()=>{
  try{
   const batch=writeBatch(db);
   for(const k of keys)batch.set(dayRef(k),{...normalDay(k),updatedAt:serverTimestamp()});
-  await batch.commit();
+  const writeEpoch=sessionEpoch;await batch.commit();
+  if(writeEpoch!==sessionEpoch)return;
   renderInput();renderChart();
   toast(erasing?'選択範囲の時間記録・記号を消去しました':'記録を保存しました');
- }catch(e){for(const [key,value] of Object.entries(backup))state.days[key]=value;renderInput();throw e}
+ }catch(e){if(epoch!==sessionEpoch)return;for(const [key,value] of Object.entries(backup))state.days[key]=value;renderInput();throw e}
 });}
 async function saveDay(){await action($('#save-day'),async()=>{
  const input=$('#day-weight'),raw=input.value.trim();
  if(raw!==''&&(!/^(?:\d+)(?:\.\d)?$/.test(raw)||!Number.isFinite(Number(raw))||Number(raw)<0.1||Number(raw)>500)){
   toast('体重は0.1〜500.0kgの範囲で小数第1位まで入力してください');input.focus();return;
  }
- const a=dayData(state.selected),before=structuredClone(a);
+ const a=dayData(state.selected),before=structuredClone(a),writeEpoch=sessionEpoch;
  a.weight=raw===''?null:validWeight(Number(raw));
  a.note=$('#day-note').value.slice(0,500);
- try{await persistDay(state.selected);renderDayPreview();renderChart();await renderAnalysis();toast('体重・眠気・出来事を保存しました')}
- catch(e){state.days[state.selected]=before;renderInput();throw e}
+ try{await persistDay(state.selected);if(writeEpoch!==sessionEpoch)return;renderDayPreview();renderChart();await renderAnalysis();if(writeEpoch!==sessionEpoch)return;toast('体重・眠気・出来事を保存しました')}
+ catch(e){if(writeEpoch!==sessionEpoch)return;state.days[state.selected]=before;renderInput();throw e}
 });}
 function sumFor(days){let s=0,r=0,recorded=0,sleepRecorded=0,weights=[],wake={'無':0,'弱':0,'強':0},day={'無':0,'弱':0,'強':0};for(const key of days){const a=state.days[key];if(!a)continue;const sn=(a.slots||[]).filter(v=>v==='sleep').length*30,rn=(a.slots||[]).filter(v=>v==='rest').length*30;if(sn||rn)sleepRecorded++;if(validWeight(a.weight)!==null)weights.push({date:key,value:validWeight(a.weight)});if(sn||rn||(a.markers||[]).length||a.note||a.wakeSleepiness||a.daySleepiness||validWeight(a.weight)!==null){recorded++;s+=sn;r+=rn;if(a.wakeSleepiness)wake[a.wakeSleepiness]=(wake[a.wakeSleepiness]||0)+1;if(a.daySleepiness)day[a.daySleepiness]=(day[a.daySleepiness]||0)+1}}return {s,r,recorded,sleepRecorded,wake,day,weights}}
 // 日次は指定した1日、週次は月・年を跨ぐ日曜〜土曜、月次は指定月の日別推移。
@@ -347,7 +390,7 @@ function weekLabel(start){
 }
 async function ensureWeekBounds(){
  if(weekBoundsCached)return;
- assertSession();const uid=currentUser.uid,col=collection(db,'users',uid,'days');
+ assertSession();const uid=currentUser.uid,epoch=sessionEpoch,col=collection(db,'users',uid,'days');
  let first='',last='',reliable=false;
  try{
   // まず先頭・末尾だけを取得して読み取り数を抑える。
@@ -370,7 +413,7 @@ async function ensureWeekBounds(){
    console.warn('週次の記録期間取得：読み込み済みの日付を利用します。',e2);
   }
  }
- if(uid!==currentUser?.uid)return;
+ if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
  const known=Object.keys(state.days).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
  earliestRecordDate=first||known[0]||'';
  latestRecordDate=last||known.at(-1)||'';
@@ -438,9 +481,11 @@ function svgPlot(data,type){
  return `<svg class="analysis-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" ${analysisView==='weekly'?'style="max-width:100%;height:auto"':''} role="img" aria-label="${weightMode?'体重（kg）':'睡眠時間（時間）'}の${analysisView==='weekly'?'選択週':'選択月'}の日別${weightMode?'折れ線':'棒'}グラフ。記録のない日は空白。"><text x="${L}" y="13" class="svg-unit">${weightMode?'体重（kg）':'睡眠時間（時間）'}</text>${grid}<line x1="${L}" y1="${T}" x2="${L}" y2="${T+plotH}" class="svg-axis-line"/>${ticks}${drawing}<text x="${W-R}" y="${H-6}" text-anchor="end" class="svg-unit">日付</text></svg>`;
 }
 async function renderAnalysis(){
+ const epoch=sessionEpoch;
  const daily=analysisView==='daily',weekly=analysisView==='weekly';
  $('#screen-analysis').classList.toggle('analysis-daily',daily);
  if(weekly&&currentUser?.emailVerified)await ensureWeekBounds();
+ if(epoch!==sessionEpoch)return;
  const weeks=weekly?selectableWeeks():[];
  if(weekly&&!weeks.some(w=>w.key===analysisWeek)){
   const todayWeek=weekStart(iso(new Date()));
@@ -463,6 +508,7 @@ async function renderAnalysis(){
   $('#analysis-first-record').textContent='';
  }
  if(currentUser?.emailVerified){const months=[...new Set(days.map(k=>k.slice(0,7)))];await Promise.all(months.map(loadMonth))}
+ if(epoch!==sessionEpoch)return;
  const s=sumFor(statDays),fmt=min=>`${Math.floor(min/60)}時間${min%60?`${min%60}分`:''}`;
  const weightAvg=s.weights.length?(s.weights.reduce((sum,x)=>sum+x.value,0)/s.weights.length).toFixed(1)+' kg':'—';
  const latestWeight=s.weights.at(-1);
@@ -527,11 +573,11 @@ async function renderAnalysis(){
  }
 }
 
-function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';updateDatePickerButtons();$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});renderSettings();renderChart()}catch(e){state.settings.theme=old;applyTheme();renderSettings();throw e}})))}
+function renderSettings(){applyTheme();$('#display-name').value=state.settings.name||'';$('#habit-bed').value=state.settings.habitBed||'23:00';$('#habit-wake').value=state.settings.habitWake||'07:00';$('#account-email').textContent=currentUser?.email||'—';$('#first-month').value=state.settings.firstMonth||'';updateDatePickerButtons();$('#theme-choices').innerHTML=Object.entries(themes).map(([id,t])=>`<button class="theme-choice ${state.settings.theme===id?'active':''}" data-id="${id}" aria-label="${t.name}" title="${t.name}"><i class="color-dot" style="background:${t.accent}"></i></button>`).join('');$$('#theme-choices button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{const old=state.settings.theme,epoch=sessionEpoch;state.settings.theme=b.dataset.id;applyTheme();try{await setDoc(userDoc(),{theme:state.settings.theme,updatedAt:serverTimestamp()},{merge:true});if(epoch!==sessionEpoch)return;renderSettings();renderChart()}catch(e){if(epoch!==sessionEpoch)return;state.settings.theme=old;applyTheme();renderSettings();throw e}})))}
 async function saveSettings(){await action($('#save-settings'),async()=>{
  const newSettings={name:$('#display-name').value.trim().slice(0,60),habitBed:$('#habit-bed').value,habitWake:$('#habit-wake').value,theme:state.settings.theme,firstMonth:$('#first-month').value||''};
  if(newSettings.habitBed===newSettings.habitWake){toast('通常の就寝時刻と起床時刻は異なる時刻を選んでください');return}
- await setDoc(userDoc(),{...newSettings,updatedAt:serverTimestamp()},{merge:true});state.settings={...state.settings,...newSettings};renderSettings();renderChart();toast('設定を保存しました');
+ const epoch=sessionEpoch;await setDoc(userDoc(),{...newSettings,updatedAt:serverTimestamp()},{merge:true});if(epoch!==sessionEpoch)return;state.settings={...state.settings,...newSettings};renderSettings();renderChart();toast('設定を保存しました');
 });}
 function makeId(){return 'med-'+(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2,10)}`)}
 
@@ -661,14 +707,14 @@ async function saveMedicine(){await action($('#med-save'),async()=>{
  if(!medicineTimings.includes(timing)){toast('服用タイミングを1つ選択してください');return}
  const id=$('#med-edit-id').value||makeId();
  const data={kind:$('#med-kind').value==='supplement'?'supplement':'medicine',name:name.slice(0,80),strength:$('#med-strength').value.trim().slice(0,60),dose,unit:$('#med-unit').value,start,end,institution:$('#med-institution').value.trim().slice(0,120),timings:[timing],timingOther:['時刻指定','一定時間ごと','その他'].includes(timing)?$('#med-timing-other').value.trim().slice(0,120):'',note:$('#med-note').value.trim().slice(0,500),updatedAt:serverTimestamp()};
- await setDoc(medRef(id),data,{merge:true});const old=state.medicines.findIndex(m=>m.id===id);
+ const writeEpoch=sessionEpoch;await setDoc(medRef(id),data,{merge:true});if(writeEpoch!==sessionEpoch)return;const old=state.medicines.findIndex(m=>m.id===id);
  const local={...data,id};if(old>=0)state.medicines[old]=local;else state.medicines.push(local);
  closeMedicineForm();toast('お薬・サプリ情報を保存しました');
 });}
 async function removeMedicine(id){
  const m=state.medicines.find(x=>x.id===id);if(!m)return;
  if(!window.confirm(`「${m.name||'名称未設定'}」を削除しますか？\nこの操作は元に戻せません。睡眠日誌の◎服薬時刻は残ります。`))return;
- await action(null,async()=>{await deleteDoc(medRef(id));state.medicines=state.medicines.filter(x=>x.id!==id);renderMedicineList();toast('登録を削除しました')});
+ await action(null,async()=>{const writeEpoch=sessionEpoch;await deleteDoc(medRef(id));if(writeEpoch!==sessionEpoch)return;state.medicines=state.medicines.filter(x=>x.id!==id);renderMedicineList();toast('登録を削除しました')});
 }
 
 /* A4横1枚のPDFを端末の印刷処理に依存せず、ブラウザ内で作成します。
@@ -765,8 +811,14 @@ async function downloadOnePagePdf(){
 $('#register-button').addEventListener('click',register);$('#login-button').addEventListener('click',login);$('#reset-password-button').addEventListener('click',passwordResetFromAuth);
 $('#auth-password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 $('#resend-verified').addEventListener('click',resendVerification);
-$('#logout-button').addEventListener('click',()=>action($('#logout-button'),()=>signOut(auth)));
-$('#verify-logout').addEventListener('click',()=>action($('#verify-logout'),()=>signOut(auth)));
+// ボタンを押した直後から個人情報を隠し、認証SDKのログアウト通知でメモリも消去する。
+async function secureSignOut(){
+ view('loading-screen');
+ try{await signOut(auth)}
+ catch(e){view(auth.currentUser?.emailVerified?'app-view':'verify-view');throw e}
+}
+$('#logout-button').addEventListener('click',()=>action($('#logout-button'),secureSignOut));
+$('#verify-logout').addEventListener('click',()=>action($('#verify-logout'),secureSignOut));
 $('#change-email').addEventListener('click',changeEmail);$('#reset-signed-password').addEventListener('click',passwordResetSigned);$('#send-verification-settings').addEventListener('click',reloadEmailStatus);
 // 日誌
 fillTimes();$$('.tab').forEach(b=>b.addEventListener('click',()=>action(null,()=>show(b.dataset.tab))));
@@ -779,7 +831,7 @@ $('#print-button').addEventListener('click',()=>{
 });
 $('#download-pdf').addEventListener('click',()=>action($('#download-pdf'),downloadOnePagePdf));
 $$('.mode').forEach(b=>b.addEventListener('click',()=>{selectedMode=b.dataset.mode;renderModes()}));
-$('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(val)){toast('日付を正しく指定してください');e.target.value=state.selected;return}action(null,async()=>{await loadMonth(val.slice(0,7));state.selected=val;state.month=val.slice(0,7);renderInput();renderChart()})});
+$('#entry-date').addEventListener('change',e=>{const val=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(val)){toast('日付を正しく指定してください');e.target.value=state.selected;return}action(null,async()=>{const epoch=sessionEpoch;await loadMonth(val.slice(0,7));if(epoch!==sessionEpoch)return;state.selected=val;state.month=val.slice(0,7);renderInput();renderChart()})});
 $('#add-entry').addEventListener('click',applyEntry);$('#save-day').addEventListener('click',saveDay);
 $$('#analysis-tabs button').forEach(b=>b.addEventListener('click',()=>action(b,async()=>{
  if(analysisView!==b.dataset.view){const today=iso(new Date());analysisDay=today;analysisMonth=today.slice(0,7);analysisWeek=weekStart(today);}
