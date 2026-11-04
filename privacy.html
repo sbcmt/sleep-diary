@@ -1,14 +1,85 @@
-<!DOCTYPE html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,follow"><title>プライバシーポリシー｜睡眠日誌</title><style>
-:root{font-family:system-ui,-apple-system,'Noto Sans JP',sans-serif;color:#253149;background:#f4f6fa}*{box-sizing:border-box}body{margin:0}main{max-width:800px;margin:32px auto;padding:32px;background:white;border:1px solid #dce4ee;border-radius:16px}h1{font-size:24px}h2{font-size:17px;margin-top:26px}p,li{line-height:1.9}a{color:#2c6d4c}small{color:#65758a}@media(max-width:700px){main{margin:12px;padding:20px;border-radius:10px}}
-</style></head><body><main>
-<p><a href="./">← 睡眠日誌に戻る</a></p><h1>プライバシーポリシー</h1><p>Dobhar-chúが提供する「睡眠日誌」は、睡眠・服薬・体重などの個人的な記録を扱います。ここでは、アプリで扱うデータと保存方法をご案内します。</p>
-<h2>1. 取り扱う情報</h2><p>利用者が登録するメールアドレス、提出書類用の名前（任意）、睡眠・休息・就寝・起床・食事・服薬・体重・眠気・出来事・設定内容を取り扱います。服薬内容等には健康に関する情報が含まれます。</p>
-<h2>2. 利用目的</h2><p>アカウント認証、記録の保存・表示・編集、日次・週次・月次の集計、PDF作成、お問い合わせへの対応、およびサービスの安全な運営のために使用します。記録を用いた自動診断や服薬指導は行いません。</p>
-<h2>3. 保存先とアクセス</h2><p>ログイン管理にはFirebase Authentication、記録の保存にはGoogleのCloud Firestoreを使用しています。クラウド上ではユーザーIDごとにデータを区分し、メール確認済みの本人だけが自身の記録を読み書きできるようアクセスルールを設けています。通信にはHTTPSを使用します。ただし、ネットワークや端末を含め、絶対的な安全を保証するものではありません。</p>
-<h2>4. ブラウザ・PDFについて</h2><p>アプリは認証状態の維持にブラウザ内の保存機能を使用する場合があります。睡眠・服薬などの記録本文は、アプリ独自のlocalStorageには保存しない設計です。PDFは利用者の端末内で生成され、保存後のPDFファイルの管理は利用者が行います。</p>
-<h2>5. 外部サービス</h2><p>アプリの公開にはGitHub Pages、認証と記録の保存にはGoogle Firebaseを利用します。各サービスにおける技術的ログ等の扱いについては、それぞれの事業者のポリシーが適用される場合があります。</p>
-<h2>6. 記録の確認・変更・削除</h2><p>日々の記録はアプリ内で変更・削除できます。アカウント全体と関連データの削除をご希望の場合は、下記窓口へお問い合わせください。アカウント全体の削除は、現在のアプリ内では完結しません。</p>
-<h2>7. お問い合わせ</h2><p>運営：Dobhar-chú<br>お問い合わせ先：<a href="mailto:info@dobharchu.jp">info@dobharchu.jp</a></p>
-<p><small>2026年11月3日 作成。正式公開前に運用内容および関連法令に照らして確認・必要に応じて改訂します。</small></p>
-</main></body></html>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>プライバシーポリシー｜睡眠日誌 | Dobhar-chú</title>
+<meta name="description" content="無料Webアプリ「睡眠日誌」で取り扱う睡眠・服薬・体重などの記録、保存先、利用目的、アカウント削除とお問い合わせについてのご案内です。">
+<link rel="canonical" href="https://sbcmt.github.io/sleep-diary/privacy.html">
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico?v=1.0.7">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1.0.7">
+<meta name="theme-color" content="#2f6945">
+<style>
+:root{--ink:#233247;--muted:#586a7e;--border:#dce4eb;--surface:#ffffff;--body:#f5f8fb;--accent:#2f6945}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--body);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;line-height:1.85}
+a{color:var(--accent);text-underline-offset:3px;overflow-wrap:anywhere}
+a:focus-visible{outline:3px solid #64a883;outline-offset:4px}
+.topbar{background:#fff;border-bottom:1px solid var(--border)}
+.topinner{max-width:1080px;margin:auto;padding:8px 24px;min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand-logo{display:block;width:168px;max-width:43vw;height:auto}
+.back{font-size:13px;font-weight:700;text-decoration:none;border:1px solid var(--border);background:#fff;padding:7px 13px;border-radius:8px;white-space:nowrap}
+.container{width:min(100% - 32px,860px);margin:34px auto 60px}
+.document{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:clamp(20px,5vw,42px);box-shadow:0 6px 26px #192c4810}
+h1{font-size:clamp(24px,4vw,31px);margin:0 0 16px;line-height:1.5}
+.intro{margin:0 0 24px}
+.policy-section{padding:21px 0;border-top:1px solid var(--border)}
+h2{font-size:18px;line-height:1.55;margin:0 0 12px;color:#234a38}
+p{margin:0 0 12px}p:last-child{margin-bottom:0}
+.contact{padding-top:21px;border-top:1px solid var(--border)}
+.updated{margin-top:27px;color:var(--muted);font-size:13px;text-align:right}
+.footer{font-size:12px;text-align:center;color:var(--muted);padding:10px 16px 28px}
+@media(max-width:520px){.topinner{padding:7px 16px;min-height:60px}.brand-logo{width:142px}.container{margin:18px auto 36px}.document{padding:21px 18px}h2{font-size:16px}.back{font-size:12px;padding:6px 9px}}
+@media print{body{background:#fff}.topbar,.footer{display:none}.container{width:100%;margin:0}.document{border:0;box-shadow:none;padding:0}.policy-section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header class="topbar">
+<div class="topinner">
+<a href="./" aria-label="睡眠日誌のトップへ"><img class="brand-logo" src="assets/sleep-diary-logo.png?v=1.0.7" alt="睡眠日誌" width="168" height="56"></a>
+<a class="back" href="./">睡眠日誌に戻る</a>
+</div>
+</header>
+<main class="container">
+<article class="document">
+<h1>プライバシーポリシー</h1>
+<p class="intro">Dobhar-chúが提供する「睡眠日誌」は、睡眠・服薬・体重などの個人的な記録を扱います。ここでは、アプリで扱うデータと保存方法をご案内します。</p>
+<section class="policy-section" aria-labelledby="heading-1">
+<h2 id="heading-1">1. 取り扱う情報</h2>
+<p>利用者が登録するメールアドレス、提出書類用の名前（任意）、睡眠・休息・就寝・起床・食事・服薬・体重・眠気・出来事・設定内容を取り扱います。服薬内容等には健康に関する情報が含まれます。</p>
+</section>
+<section class="policy-section" aria-labelledby="heading-2">
+<h2 id="heading-2">2. 利用目的</h2>
+<p>アカウント認証、記録の保存・表示・編集、日次・週次・月次の集計、PDF作成、お問い合わせへの対応、およびサービスの安全な運営のために使用します。記録を用いた自動診断や服薬指導は行いません。</p>
+</section>
+<section class="policy-section" aria-labelledby="heading-3">
+<h2 id="heading-3">3. 保存先とアクセス</h2>
+<p>ログイン管理にはFirebase Authentication、記録の保存にはGoogleのCloud Firestoreを使用しています。クラウド上ではユーザーIDごとにデータを区分し、メール確認済みの本人だけが自身の記録を読み書きできるようアクセスルールを設けています。通信にはHTTPSを使用します。ただし、ネットワークや端末を含め、絶対的な安全を保証するものではありません。</p>
+</section>
+<section class="policy-section" aria-labelledby="heading-4">
+<h2 id="heading-4">4. ブラウザ・PDFについて</h2>
+<p>アプリは認証状態の維持にブラウザ内の保存機能を使用する場合があります。睡眠・服薬などの記録本文は、アプリ独自のlocalStorageには保存しない設計です。PDFは利用者の端末内で生成され、保存後のPDFファイルの管理は利用者が行います。</p>
+</section>
+<section class="policy-section" aria-labelledby="heading-5">
+<h2 id="heading-5">5. 外部サービス</h2>
+<p>アプリの公開にはGitHub Pages、認証と記録の保存にはGoogle Firebaseを利用します。各サービスにおける技術的ログ等の扱いについては、それぞれの事業者のポリシーが適用される場合があります。</p>
+</section>
+<section class="policy-section" aria-labelledby="heading-6">
+<h2 id="heading-6">6. 記録の確認・変更・削除</h2>
+<p>日々の記録はアプリ内で確認・変更・削除できます。</p>
+<p>アカウント全体の削除は、「ユーザー設定」の最下部にある「アカウントを削除」から行えます。本人確認後、アカウントおよび関連する睡眠・体重・服薬などの保存データが削除されます。</p>
+<p>なお、端末にダウンロード済みのPDFファイルは自動削除されません。アカウント削除の操作が正常に完了しない場合は、下記窓口へお問い合わせください。</p>
+</section>
+<section class="contact" aria-labelledby="contact-heading">
+<h2 id="contact-heading">7. お問い合わせ</h2>
+<p>運営：Dobhar-chú</p>
+<p>お問い合わせ先：<a href="mailto:info@dobharchu.jp">info@dobharchu.jp</a></p>
+</section>
+<p class="updated">最終更新日：2026年11月4日</p>
+</article>
+</main>
+<footer class="footer">© 2021–2026 Dobhar-chú</footer>
+</body>
+</html>
