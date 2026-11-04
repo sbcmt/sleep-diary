@@ -1,10 +1,11 @@
-/** 睡眠日誌 v1.2.3 (2026-11-04) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.4 (2026-11-04) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
   signInWithEmailAndPassword, signOut, sendEmailVerification,
+  setPersistence, browserLocalPersistence, browserSessionPersistence,
   sendPasswordResetEmail, reload, getIdToken,
   verifyBeforeUpdateEmail, EmailAuthProvider, reauthenticateWithCredential
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -182,6 +183,7 @@ function clearSensitiveSessionState(){
  $$('#app-view input, #app-view textarea').forEach(el=>{if(el.type!=='checkbox'&&el.type!=='radio')el.value=''});
  $$('#app-view select').forEach(el=>{el.selectedIndex=0});
  $('#auth-email').value='';$('#auth-password').value='';
+ $('#auth-remember').checked=false;
  $('#auth-notice').textContent='';$('#auth-notice').classList.remove('show');
  const dialog=$('#date-picker-dialog');if(dialog?.open)dialog.close();
  const guide=$('#guide-dialog');if(guide?.open)guide.close();
@@ -210,10 +212,15 @@ async function accountState(u){
 }
 onAuthStateChanged(auth,accountState);
 function verificationActionSettings(){return {url:window.location.origin+window.location.pathname,handleCodeInApp:false}}
-async function register(){const email=$('#auth-email').value.trim(),pwd=$('#auth-password').value;if(!email||pwd.length<6){notice('メールアドレスと6文字以上のパスワードを入力してください。');return}
- await action($('#register-button'),async()=>{const {user}=await createUserWithEmailAndPassword(auth,email,pwd);await sendEmailVerification(user,verificationActionSettings());notice('確認メールを送信しました。メール内のリンクで認証してください。');});}
-async function login(){const email=$('#auth-email').value.trim(),pwd=$('#auth-password').value;if(!email||!pwd){notice('メールアドレスとパスワードを入力してください。');return}
- await action($('#login-button'),async()=>{await signInWithEmailAndPassword(auth,email,pwd);$('#auth-password').value='';$('#auth-notice').classList.remove('show')});}
+// 認証状態のみを保持する。睡眠・服薬記録はブラウザストレージへ保存しない。
+// 新規登録もFirebase認証上は自動ログインになるため、同じ保持設定を適用する。
+async function chooseAuthPersistence(remember){
+ await setPersistence(auth,remember?browserLocalPersistence:browserSessionPersistence);
+}
+async function register(){const email=$('#auth-email').value.trim(),pwd=$('#auth-password').value,remember=$('#auth-remember').checked;if(!email||pwd.length<6){notice('メールアドレスと6文字以上のパスワードを入力してください。');return}
+ await action($('#register-button'),async()=>{await chooseAuthPersistence(remember);const {user}=await createUserWithEmailAndPassword(auth,email,pwd);await sendEmailVerification(user,verificationActionSettings());notice('確認メールを送信しました。メール内のリンクで認証してください。');});}
+async function login(){const email=$('#auth-email').value.trim(),pwd=$('#auth-password').value,remember=$('#auth-remember').checked;if(!email||!pwd){notice('メールアドレスとパスワードを入力してください。');return}
+ await action($('#login-button'),async()=>{await chooseAuthPersistence(remember);await signInWithEmailAndPassword(auth,email,pwd);$('#auth-password').value='';$('#auth-notice').classList.remove('show')});}
 async function passwordResetFromAuth(){const email=$('#auth-email').value.trim();if(!email){notice('先にメールアドレスを入力してください。');return}
  await action($('#reset-password-button'),async()=>{await sendPasswordResetEmail(auth,email);notice('アカウントが存在する場合、再設定用メールが送信されます。')});}
 async function resendVerification(){if(!auth.currentUser)return;await action($('#resend-verified'),async()=>{await sendEmailVerification(auth.currentUser,verificationActionSettings());toast('確認メールを送信しました')});}
@@ -811,10 +818,28 @@ async function downloadOnePagePdf(){
 $('#register-button').addEventListener('click',register);$('#login-button').addEventListener('click',login);$('#reset-password-button').addEventListener('click',passwordResetFromAuth);
 $('#auth-password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 $('#resend-verified').addEventListener('click',resendVerification);
+// SESSION方式はタブごとに独立するため、明示的なログアウトだけは同一サイト内の各タブへ通知する。
+// 通知に個人情報・記録データを含めない。Firebase自体のLOCALモードでの同期も維持する。
+const LOGOUT_SIGNAL_KEY='sleep-diary:logout';
+const logoutChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('sleep-diary:auth-events'):null;
+let remoteSigningOut=false;
+async function applyRemoteSignOut(){
+ if(remoteSigningOut||!auth.currentUser)return;
+ remoteSigningOut=true;
+ view('loading-screen');
+ try{await signOut(auth)}catch(e){console.warn('別タブからのログアウト反映に失敗',e)}
+ finally{remoteSigningOut=false}
+}
+if(logoutChannel)logoutChannel.onmessage=e=>{if(e.data==='signout')void applyRemoteSignOut()};
+window.addEventListener('storage',e=>{if(e.key===LOGOUT_SIGNAL_KEY&&e.newValue)void applyRemoteSignOut()});
+function notifyOtherTabsOfSignOut(){
+ try{logoutChannel?.postMessage('signout')}catch(e){console.warn('別タブへの通知',e)}
+ try{localStorage.setItem(LOGOUT_SIGNAL_KEY,String(Date.now()))}catch(e){console.warn('別タブへのストレージ通知',e)}
+}
 // ボタンを押した直後から個人情報を隠し、認証SDKのログアウト通知でメモリも消去する。
 async function secureSignOut(){
  view('loading-screen');
- try{await signOut(auth)}
+ try{await signOut(auth);notifyOtherTabsOfSignOut()}
  catch(e){view(auth.currentUser?.emailVerified?'app-view':'verify-view');throw e}
 }
 $('#logout-button').addEventListener('click',()=>action($('#logout-button'),secureSignOut));
