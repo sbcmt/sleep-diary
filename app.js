@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.2.4 (2026-11-04) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.5 (2026-11-04) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -130,7 +130,7 @@ function userDoc(){return doc(db,'users',currentUser.uid)}
 function dayRef(key){return doc(db,'users',currentUser.uid,'days',key)}
 function medRef(key){return doc(db,'users',currentUser.uid,'medications',key)}
 function assertSession(){if(!currentUser||!currentUser.emailVerified)throw new Error('not signed in')}
-function normalDay(key){const a=state.days[key];return a?{...freshDay(),...a,weight:validWeight(a.weight),slots:Array.from({length:48},(_,i)=>['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:''),markers:(a.markers||[]).filter(x=>Number.isInteger(x.slot)&&x.slot>=0&&x.slot<48&&['med','bed','wake','meal'].includes(x.type))}:freshDay()}
+function normalDay(key){const a=state.days[key];return a?{...freshDay(),...a,note:String(a.note??'').slice(0,500),weight:validWeight(a.weight),slots:Array.from({length:48},(_,i)=>['sleep','rest'].includes(a.slots?.[i])?a.slots[i]:''),markers:(a.markers||[]).filter(x=>Number.isInteger(x.slot)&&x.slot>=0&&x.slot<48&&['med','bed','wake','meal'].includes(x.type))}:freshDay()}
 function validWeight(v){return typeof v==='number'&&Number.isFinite(v)&&v>=0.1&&v<=500&&Math.abs(v*10-Math.round(v*10))<0.00001?Math.round(v*10)/10:null}
 function dayData(key){return state.days[key]??(state.days[key]=freshDay())}
 async function loadMonth(month){
@@ -380,7 +380,7 @@ async function saveDay(){await action($('#save-day'),async()=>{
  const a=dayData(state.selected),before=structuredClone(a),writeEpoch=sessionEpoch;
  a.weight=raw===''?null:validWeight(Number(raw));
  a.note=$('#day-note').value.slice(0,500);
- try{await persistDay(state.selected);if(writeEpoch!==sessionEpoch)return;renderDayPreview();renderChart();await renderAnalysis();if(writeEpoch!==sessionEpoch)return;toast('体重・眠気・出来事を保存しました')}
+ try{await persistDay(state.selected);if(writeEpoch!==sessionEpoch)return;$('#day-note').value=a.note;renderDayPreview();renderChart();await renderAnalysis();if(writeEpoch!==sessionEpoch)return;toast('体重・眠気・出来事を保存しました')}
  catch(e){if(writeEpoch!==sessionEpoch)return;state.days[state.selected]=before;renderInput();throw e}
 });}
 function sumFor(days){let s=0,r=0,recorded=0,sleepRecorded=0,weights=[],wake={'無':0,'弱':0,'強':0},day={'無':0,'弱':0,'強':0};for(const key of days){const a=state.days[key];if(!a)continue;const sn=(a.slots||[]).filter(v=>v==='sleep').length*30,rn=(a.slots||[]).filter(v=>v==='rest').length*30;if(sn||rn)sleepRecorded++;if(validWeight(a.weight)!==null)weights.push({date:key,value:validWeight(a.weight)});if(sn||rn||(a.markers||[]).length||a.note||a.wakeSleepiness||a.daySleepiness||validWeight(a.weight)!==null){recorded++;s+=sn;r+=rn;if(a.wakeSleepiness)wake[a.wakeSleepiness]=(wake[a.wakeSleepiness]||0)+1;if(a.daySleepiness)day[a.daySleepiness]=(day[a.daySleepiness]||0)+1}}return {s,r,recorded,sleepRecorded,wake,day,weights}}
