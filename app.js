@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.2.5 (2026-11-04) | © 2021–2026 Dobhar-chú
+/** 睡眠日誌 v1.2.6 (2026-11-04) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -111,7 +111,17 @@ function errMsg(e){
  };
  return codes[e?.code]||'操作を完了できませんでした。再度お試しください。';
 }
-async function action(btn,run){if(busy)return;busy=true;const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='処理中…'}try{await run()}catch(e){console.error('睡眠日誌操作エラー',e);toast(errMsg(e))}finally{busy=false;if(btn){btn.disabled=false;btn.textContent=old}}}
+// Consoleにはエラーオブジェクト・メッセージ・通信レスポンスを出さず、許可したエラーコードのみ記録する。
+// SDKの例外文面には、予期せずリクエスト情報が含まれる可能性があるため。
+const SAFE_ERROR_CODES=new Set([
+ 'auth/invalid-credential','auth/wrong-password','auth/email-already-in-use',
+ 'auth/invalid-email','auth/weak-password','auth/too-many-requests',
+ 'auth/requires-recent-login','auth/unauthorized-domain','auth/network-request-failed',
+ 'permission-denied','unavailable','failed-precondition','not-found',
+ 'deadline-exceeded','unauthenticated','resource-exhausted','cancelled'
+]);
+function safeErrorCode(e){return SAFE_ERROR_CODES.has(e?.code)?e.code:'unknown-error'}
+async function action(btn,run){if(busy)return;busy=true;const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='処理中…'}try{await run()}catch(e){console.error('睡眠日誌操作エラー',safeErrorCode(e));toast(errMsg(e))}finally{busy=false;if(btn){btn.disabled=false;btn.textContent=old}}}
 function view(which){if(which==='verify-view')startAutoVerification();else stopAutoVerification();for(const name of ['auth-view','verify-view','app-view','loading-screen'])$('#'+name).classList.toggle('site-hidden',name!==which);$('#logout-button').classList.toggle('site-hidden',which!=='app-view')}
 // 外部ブラウザや別端末で認証しても、開いているアプリが自動検知する。
 function stopAutoVerification(){if(verifyTimer){clearInterval(verifyTimer);verifyTimer=null}}
@@ -121,7 +131,7 @@ async function refreshVerificationSilently(){
  checkingVerification=true;
  try{await reload(auth.currentUser);await getIdToken(auth.currentUser,true);
    if(auth.currentUser.emailVerified){stopAutoVerification();await accountState(auth.currentUser);toast('メール認証が完了しました')}}
- catch(e){console.warn('メール認証自動確認',e)}
+ catch(e){console.warn('メール認証自動確認',safeErrorCode(e))}
  finally{checkingVerification=false}
 }
 window.addEventListener('focus',()=>{refreshVerificationSilently()});
@@ -203,12 +213,12 @@ async function accountState(u){
  currentUser=u;
  if(!u){view('auth-view');return}
  view('loading-screen');
- try{await reload(u);await getIdToken(u,true)}catch(e){console.warn('refresh auth',e)}
+ try{await reload(u);await getIdToken(u,true)}catch(e){console.warn('refresh auth',safeErrorCode(e))}
  if(epoch!==sessionEpoch)return;
  if(!u.emailVerified){$('#verify-email-value').textContent=u.email||'';view('verify-view');return}
  try{await loadInitial();if(epoch!==sessionEpoch)return;
    $('#account-email').textContent=u.email||'';view('app-view');
- }catch(e){if(epoch!==sessionEpoch)return;console.error(e);notice(errMsg(e));view('auth-view');}
+ }catch(e){if(epoch!==sessionEpoch)return;console.error('認証データ取得エラー',safeErrorCode(e));notice(errMsg(e));view('auth-view');}
 }
 onAuthStateChanged(auth,accountState);
 function verificationActionSettings(){return {url:window.location.origin+window.location.pathname,handleCodeInApp:false}}
@@ -410,14 +420,14 @@ async function ensureWeekBounds(){
   reliable=true;
  }catch(e){
   // 一部のFirestore設定・旧環境で並び順付き取得が失敗しても週次を使用可能にする。
-  console.warn('週次の記録期間取得：並び順付き取得に失敗。再取得します。',e);
+  console.warn('週次の記録期間取得：並び順付き取得に失敗。再取得します。',safeErrorCode(e));
   try{
    const all=await getDocs(col);
    const keys=all.docs.map(d=>d.id).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
    first=keys[0]||'';last=keys.at(-1)||'';
    reliable=true;
   }catch(e2){
-   console.warn('週次の記録期間取得：読み込み済みの日付を利用します。',e2);
+   console.warn('週次の記録期間取得：読み込み済みの日付を利用します。',safeErrorCode(e2));
   }
  }
  if(epoch!==sessionEpoch||uid!==currentUser?.uid)return;
@@ -827,14 +837,14 @@ async function applyRemoteSignOut(){
  if(remoteSigningOut||!auth.currentUser)return;
  remoteSigningOut=true;
  view('loading-screen');
- try{await signOut(auth)}catch(e){console.warn('別タブからのログアウト反映に失敗',e)}
+ try{await signOut(auth)}catch(e){console.warn('別タブからのログアウト反映に失敗',safeErrorCode(e))}
  finally{remoteSigningOut=false}
 }
 if(logoutChannel)logoutChannel.onmessage=e=>{if(e.data==='signout')void applyRemoteSignOut()};
 window.addEventListener('storage',e=>{if(e.key===LOGOUT_SIGNAL_KEY&&e.newValue)void applyRemoteSignOut()});
 function notifyOtherTabsOfSignOut(){
- try{logoutChannel?.postMessage('signout')}catch(e){console.warn('別タブへの通知',e)}
- try{localStorage.setItem(LOGOUT_SIGNAL_KEY,String(Date.now()))}catch(e){console.warn('別タブへのストレージ通知',e)}
+ try{logoutChannel?.postMessage('signout')}catch(e){console.warn('別タブへの通知',safeErrorCode(e))}
+ try{localStorage.setItem(LOGOUT_SIGNAL_KEY,String(Date.now()))}catch(e){console.warn('別タブへのストレージ通知',safeErrorCode(e))}
 }
 // ボタンを押した直後から個人情報を隠し、認証SDKのログアウト通知でメモリも消去する。
 async function secureSignOut(){
