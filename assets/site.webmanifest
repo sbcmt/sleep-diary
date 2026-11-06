@@ -1,7 +1,7 @@
 {
-  "name": "睡眠日誌",
-  "short_name": "睡眠日誌",
-  "description": "毎日の睡眠・休息・服薬・体重を記録する睡眠日誌",
+  "name": "睡眠手記",
+  "short_name": "睡眠手記",
+  "description": "毎日の睡眠・休息・服薬・体重を記録する睡眠手記",
   "lang": "ja",
   "start_url": "/sleep-diary/",
   "scope": "/sleep-diary/",
