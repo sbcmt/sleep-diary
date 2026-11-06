@@ -1,4 +1,4 @@
-/** 睡眠日誌 v1.2.7 (2026-11-04) | © 2021–2026 Dobhar-chú
+/** 睡眠手記 v1.2.7 (2026-11-04) | © 2021–2026 Dobhar-chú
  * Firebase Authentication + Firestore。睡眠・服薬の内容は localStorage に保存しない。
  */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -121,7 +121,7 @@ const SAFE_ERROR_CODES=new Set([
  'deadline-exceeded','unauthenticated','resource-exhausted','cancelled'
 ]);
 function safeErrorCode(e){return SAFE_ERROR_CODES.has(e?.code)?e.code:'unknown-error'}
-async function action(btn,run){if(busy)return;busy=true;const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='処理中…'}try{await run()}catch(e){console.error('睡眠日誌操作エラー',safeErrorCode(e));toast(errMsg(e))}finally{busy=false;if(btn){btn.disabled=false;btn.textContent=old}}}
+async function action(btn,run){if(busy)return;busy=true;const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='処理中…'}try{await run()}catch(e){console.error('睡眠手記操作エラー',safeErrorCode(e));toast(errMsg(e))}finally{busy=false;if(btn){btn.disabled=false;btn.textContent=old}}}
 function view(which){if(which==='verify-view')startAutoVerification();else stopAutoVerification();for(const name of ['auth-view','verify-view','app-view','loading-screen'])$('#'+name).classList.toggle('site-hidden',name!==which);$('#logout-button').classList.toggle('site-hidden',which!=='app-view')}
 // 外部ブラウザや別端末で認証しても、開いているアプリが自動検知する。
 function stopAutoVerification(){if(verifyTimer){clearInterval(verifyTimer);verifyTimer=null}}
@@ -860,7 +860,7 @@ async function saveMedicine(){await action($('#med-save'),async()=>{
 });}
 async function removeMedicine(id){
  const m=state.medicines.find(x=>x.id===id);if(!m)return;
- if(!window.confirm(`「${m.name||'名称未設定'}」を削除しますか？\nこの操作は元に戻せません。睡眠日誌の◎服薬時刻は残ります。`))return;
+ if(!window.confirm(`「${m.name||'名称未設定'}」を削除しますか？\nこの操作は元に戻せません。睡眠手記の◎服薬時刻は残ります。`))return;
  await action(null,async()=>{const writeEpoch=sessionEpoch;await deleteDoc(medRef(id));if(writeEpoch!==sessionEpoch)return;state.medicines=state.medicines.filter(x=>x.id!==id);renderMedicineList();toast('登録を削除しました')});
 }
 
@@ -884,7 +884,7 @@ async function downloadOnePagePdf(){
   else cx.fillText(String(str||''),x,y);cx.restore();
  };
  const line=(x1,y1,x2,y2,color='#b4bfcd',width=1,dash=[])=>{cx.save();cx.strokeStyle=color;cx.lineWidth=width;cx.setLineDash(dash);cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();cx.restore()};
- tx('睡眠日誌',margin,52,'bold 42px sans-serif');
+ tx('睡眠手記',margin,52,'bold 42px sans-serif');
  tx(`${year}年${month}月`,margin+230,53,'bold 29px sans-serif');
  tx(state.settings.name?`氏名：${state.settings.name}`:'氏名：　　　　　　　　　',margin,107,'24px sans-serif','#28364a', 'left',930);
  tx(`記録期間：${year}年${month}月1日〜${numDays}日`,W-margin,107,'22px sans-serif','#40556d','right');
@@ -949,7 +949,7 @@ async function downloadOnePagePdf(){
  const xref=pos;a('xref\n0 6\n0000000000 65535 f \n');for(let id=1;id<=5;id++)a(String(offsets[id]).padStart(10,'0')+' 00000 n \n');
  a(`trailer\n<< /Root 1 0 R /Size 6 >>\nstartxref\n${xref}\n%%EOF`);
  const data=new Blob(chunks,{type:'application/pdf'}),url=URL.createObjectURL(data),link=document.createElement('a');
- link.href=url;link.download=`睡眠日誌_${year}-${String(month).padStart(2,'0')}.pdf`;
+ link.href=url;link.download=`睡眠手記_${year}-${String(month).padStart(2,'0')}.pdf`;
  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
  toast('A4横・1ページのPDFを作成しました');
 }

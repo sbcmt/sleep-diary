@@ -1,4 +1,4 @@
-# 睡眠日誌 Ver.1.0.7 — Dobhar-chú
+# 睡眠手記 Ver.1.0.7 — Dobhar-chú
 
 © 2021–2026 Dobhar-chú
 
